@@ -28,14 +28,9 @@ classdef  LaserSignal < handle
       'Laser0Shift' , 'Laser1Shift' , 'Laser1SF' , 'LaserID' , ...
         'Frequency' , 'LatchRfTime' } ;
     
-    % Mapping of Gizmo control names to class property names. In register
-    % with REQPAR.
-    PARMAP = { 'DAQON' , 'DAQOFF' , 'TimerSamp' , 'PreAmp' , 'Laser0SF',...
-      'Laser0Shift' , 'Laser1Shift' , 'Laser1SF' , 'LaserID' , ...
-        'Frequency' , 'LatchRfTime' } ;
-    
-    % Maximum allowable Voltage, after scalind + shifting
-    MXVOLT = 6 ;
+    % Mapping of Gizmo control names (field) to class property names
+    % (value), where these differ
+    PARMAP = struct( 'Timer' , 'TimerSamp' ) ;
     
   end
   
@@ -51,21 +46,28 @@ classdef  LaserSignal < handle
     % Otherwise, repeated markers of value DAQON will be ignored.
     DAQOFF  uint16
     
-    % Value of a countdown timer, in ms. The timer begins counting down
-    % from this value when an event marker with value DAQON is received.
+    % Target value of a countdown timer, in ms. This is the value that the
+    % timer will aim for. The actual time is dependent on both the
+    % sinusoidal frequency and the TDT sampling rate (see below). The timer
+    % begins counting down from this value when an event marker with value
+    % DAQON is received.
+    % 
     % NOTE: Upon setting this value, it is automatically rounded up to the
     % end of the final sinusoidal cycle before being rounded up to the next
     % complete TDT sample, at the given TDT sampling rate and sinusoidal
-    % frequency.
+    % frequency. The rounded value is stored in the TimerUp property. The
+    % original target value will be maintained in Timer so that Timer <=
+    % TimerUp.
     % 
     % For example, let Synapse be linked to an RZ2 that samples at
     % 24414.0625Hz, and let the sinusoid have a frequency of 60
     % cycles/second. Timer is assigned a value of 175ms. But 175/1e3*60 =
     % 10.5. That is, 175ms is 10 and one half sinusoidal cycles. Rounding
-    % up to 11 full sinusoidal cycles forces Timer to become 11/60*1e3
-    % approx. 183.333ms. However, 11/60*24414.0625 is approx. 4475.9 TDT
-    % samples. Rounding up to 4476 TDT samples then forces Timer to be
-    % 183.33696ms.
+    % up to 11 full sinusoidal cycles requires 11/60*1e3 approx. 183.333ms.
+    % However, 11/60*24414.0625 is approx. 4475.9 TDT samples. Rounding up
+    % to 4476 TDT samples requires 183.33696ms. Hence, Timer = 175ms. But
+    % TimerUp = 183.33696. And TimerSamp = 4476. Thus the actual timer will
+    % run 8.33696ms longer than the target value.
     % 
     Timer  double
     
@@ -124,10 +126,15 @@ classdef  LaserSignal < handle
   end
   
   
-  properties  ( SetAccess = private )
+  properties  ( SetAccess = private , AbortSet )
     
     % Initialisation flag. Lower when all init is finished.
     init = true ;
+    
+    % List of parameters that we would like to read from on a regular
+    % basis e.g. to store values used on each trial. NOTE! This will be
+    % concatenated with REQPAR during initialisation.
+    GETPAR = { 'name' , 'parent' , 'fs' , 'TimerUp' , 'TimerSamp' } ;
     
     % Name of specific LaserSignal Gizmo, a given instance in the Synapse
     % experiment, that this instance of the MATLAB LaserSignal class will
@@ -152,7 +159,12 @@ classdef  LaserSignal < handle
     % about that parameter, as returned by SynapseAPI.
     ipar  struct
     
-    % Timer value, in number of parent device samples
+    % Timer valus, in milliseconds, after rounding up to the next complete
+    % sinusoidal cycle and TDT sample.
+    TimerUp  double
+    
+    % Timer value, in number of parent device samples. Equals the same time
+    % duration as in TimerUp.
     TimerSamp  uint32
     
     % Number of parent device samples in the sinusoidal rising phase (which
@@ -225,6 +237,9 @@ classdef  LaserSignal < handle
       
       %-- Initialise remaining object parameters --%
       
+      % Create full list of 'get' parameter names
+      obj.GETPAR = [ obj.REQPAR , obj.GETPAR ] ;
+      
       % Information about the named Gizmo
       obj.info = syn.getGizmoInfo( nam ) ;
       
@@ -247,7 +262,11 @@ classdef  LaserSignal < handle
         i = strcmp( par , obj.REQPAR ) ;
         
         % Gizmo control maps to MATLAB object parameter named ...
-        map = obj.PARMAP{ i } ;
+        if  isfield( obj.PARMAP , par )
+          map = obj.PARMAP.( par ) ;
+        else
+          map = par ;
+        end
         
         % Retrieve parameter value
         obj.( map ) = syn.getParameterValue( nam , par ) ;
@@ -259,7 +278,7 @@ classdef  LaserSignal < handle
       % and falling phase at the start and end of the analogue signal.
       obj.Plateau = obj.LatchRfTime  <  double( obj.TimerSamp ) / 2 ;
       
-      % Convert timer from samples to ms
+      % Convert timer from samples to ms. Assignment sets TimerUp as well.
       obj.Timer = double( obj.TimerSamp ) / obj.fs * 1e3 ;
       
       % Initialisation is finished
@@ -276,24 +295,19 @@ classdef  LaserSignal < handle
     end
     
     
-    function  x = chklim( obj , par , x , spv )
+    function  x = chklim( obj , par , x )
     %
-    % x = chklim( obj , par , x , spv ). Check whether value x is within
-    % the valid range that is required by the obj parameter named par. x is
+    % x = chklim( obj , par , x ). Check whether value x is within the
+    % valid range that is required by the obj parameter named par. x is
     % returned without modification if is within the parameter's range.
-    % Otherwise, an error is issued. spv is optional. If true then the new
-    % parameter value is sent to the corresponding Synapse Gizmo control,
-    % following limit checking. spv defaults true. As an added bonus,
-    % issues an error if x is not scalar.
+    % Otherwise, an error is issued. As an added bonus, issues an error if
+    % x is not scalar.
     %
       
       % x must be scalar
-      if  ~ isscalar( x )
-        error( 'New value of %s must be scalar.' , par )
-      end
+      if  ~ isscalar( x ) , error( '%s must be scalar.' , par ) , end
       
-      % Default values
-      if  nargin < 4 , spv = true ; end
+      % Default error string
       estr = '' ;
       
       % Range check
@@ -304,11 +318,16 @@ classdef  LaserSignal < handle
       % x is out of range
       if  estr , error( 'New value %s %s''s limits.' , estr , par ) ; end
       
-      % Change the corresponding Gizmo control value, unless object is
-      % still initialising
-      if  spv  &&  ~obj.init
-        obj.syn.setParameterValue( obj.name , par , x )
-      end
+      % Initialising, take no action
+      if  obj.init
+        
+      % Change the corresponding Gizmo control value
+      elseif  ~ obj.syn.setParameterValue( obj.name , par , x )
+        
+        % Failed to update control
+        error( 'Failed to update control %s of Gizmo %s.', par, obj.name )
+        
+      end % change Gizmo control value
       
     end
     
@@ -323,37 +342,48 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.Timer( obj , tnew )
+    function  obj = set.Timer( obj , x )
+    %
+    % Assign new target duration for the timer, in milliseconds
+    %
+      
+      % Check that x is scalar
+      if  ~isscalar( x ) , error( 'New Time value must be scalar.' ) , end
+      
+      % Assign new target timer duration
+      obj.Timer = x ;
+      
+      % Round up to next complete sinusoidal cycle and TDT sample
+      obj.TimerUp = obj.Timer ;
+      
+    end
+    
+    
+    function  obj = set.TimerUp( obj , x )
     % 
     % First, rounds up to the end of the end of final sinusoidal cycle.
     % Then rounds up to end of next complete TDT sample.
-    % 
+    %   
       
-      % Initialisation phase, just assign the value as it is
-      if  obj.init , obj.Timer = tnew ; return
-        
-      % Check that x is scalar
-      elseif  ~isscalar( tnew ) , error( 'New Time value must be scalar.' )
-      end
-      
-      % First convert from milliseconds to seconds
-      x = double( tnew ) / 1e3 ;
+      % Simple assignment during initialisation
+      if  obj.init , obj.TimerUp = x ; return , end
       
       % Cast sine frequency as double
       freq = double( obj.Frequency ) ;
       
-      % Convert from sec to number of sinusoidal cycles at set frequency.
+      % Convert from ms to number of sinusoidal cycles at set frequency.
       % And round up so that we only have complete sinusoidal cycles.
-      cyc = ceil( x * freq ) ;
+      cyc = ceil( x / 1e3 * freq ) ;
       
       % Now convert to number of samples. And again, round up to next
       % complete sample.
       samp = ceil( cyc / freq * obj.fs ) ;
       
-      % Finally, assign millisecond value to property
-      obj.Timer = samp / obj.fs * 1e3 ;
+      % Convert from TDT samples to milliseconds and assign rounded timer
+      % duration to TimerUp
+      obj.TimerUp = samp / obj.fs * 1e3 ;
       
-      % And assign timer value in number of samples
+      % And assign new timer value in number of TDT samples
       obj.TimerSamp = samp ;
       
     end
@@ -361,47 +391,36 @@ classdef  LaserSignal < handle
     
     function  obj = set.TimerSamp( obj , x )
       
-      % Get limits from corresponding Gizmo control
-      min = obj.ipar.Timer.Min ;
-      max = obj.ipar.Timer.Max ;
+      % Assign value. Input arg string refers to the Gizmo control.
+      obj.TimerSamp = obj.chklim( 'Timer' , x ) ;
       
-      % X falls out of range
-      if  x < min || max < x
-        error( 'Timer (samples) exceeds valid range.' )
-      end
-      
-      % Assign value
-      obj.TimerSamp = x ;
-      
-      % But then we update the Timer control in the LaserSignal Gizmo.
-      % Becaues that control expects a value in samples.
-      if  ~ obj.init
-        obj.syn.setParameterValue( obj.name , 'Timer' , obj.TimerSamp )
-      end
+      % Re-calculate latch time
+      obj.implementplateau
       
     end
     
     
-    function  obj = set.Frequency( obj , x )
+    function  obj = set.Frequency( obj , newfreq )
       
-      % First, check and update frequency value
-      obj.Frequency = obj.chklim( 'Frequency' , x ) ;
+      % Initialisation phase, set value and quit
+      if  obj.init , obj.Frequency = newfreq ; return , end
       
-      % Initialisation phase, so don't touch Timer property
-      if  obj.init , return , end
+      % Check and assign new frequency value
+      obj.Frequency = obj.chklim( 'Frequency' , newfreq ) ;
       
-      % Next, compute number of cycles within current timer duration. And
-      % round up to next complete cycle.
-      cyc = ceil( obj.Timer / 1e3 * obj.Frequency ) ;
-      
-      % Set new timer value
-      obj.Timer = cyc / obj.Frequency * 1e3 ;
+      % Re-calculate timer extension to target value
+      obj.TimerUp = obj.Timer ;
       
     end
 
 
     function  obj = set.PreAmp( obj , x )
       obj.PreAmp = obj.chklim( 'PreAmp' , x ) ;
+    end
+    
+    
+    function  obj = set.LatchRfTime( obj , x )
+      obj.LatchRfTime = obj.chklim( 'LatchRfTime' , x ) ;
     end
     
     
@@ -440,10 +459,21 @@ classdef  LaserSignal < handle
       % Set value
       obj.Plateau = x ;
       
-      % Initialisation, don't change LatchRfTime
+      % Update LatchRfTime appropriately
+      obj.implementplateau
+      
+    end
+    
+    
+    function  implementplateau( obj )
+    % 
+    % implementplateau( obj ). Does the job of actually setting the
+    % LatchRfTime property/Gizmo control to the value required to implement
+    % the state of the Plateau property.
+    % 
+      
+      % Initialisation , no action
       if  obj.init
-        
-        % No action
         
       % Plateau enabled
       elseif  obj.Plateau
