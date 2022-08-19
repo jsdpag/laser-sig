@@ -329,9 +329,11 @@ classdef  LaserSignal < handle
     % Then rounds up to end of next complete TDT sample.
     % 
       
+      % Initialisation phase, just assign the value as it is
+      if  obj.init , obj.Timer = tnew ; return
+        
       % Check that x is scalar
-      if  ~ isscalar( tnew )
-        error( 'New Time value must be scalar.' )
+      elseif  ~isscalar( tnew ) , error( 'New Time value must be scalar.' )
       end
       
       % First convert from milliseconds to seconds
@@ -385,12 +387,15 @@ classdef  LaserSignal < handle
       % First, check and update frequency value
       obj.Frequency = obj.chklim( 'Frequency' , x ) ;
       
+      % Initialisation phase, so don't touch Timer property
+      if  obj.init , return , end
+      
       % Next, compute number of cycles within current timer duration. And
       % round up to next complete cycle.
       cyc = ceil( obj.Timer / 1e3 * obj.Frequency ) ;
       
       % Set new timer value
-      if  ~obj.init , obj.Timer = cyc / obj.Frequency * 1e3 ; end
+      obj.Timer = cyc / obj.Frequency * 1e3 ;
       
     end
 
@@ -437,6 +442,8 @@ classdef  LaserSignal < handle
       
       % Initialisation, don't change LatchRfTime
       if  obj.init
+        
+        % No action
         
       % Plateau enabled
       elseif  obj.Plateau
