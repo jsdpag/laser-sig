@@ -126,6 +126,9 @@ classdef  LaserSignal < handle
   
   properties  ( SetAccess = private )
     
+    % Initialisation flag. Lower when all init is finished.
+    init = true ;
+    
     % Name of specific LaserSignal Gizmo, a given instance in the Synapse
     % experiment, that this instance of the MATLAB LaserSignal class will
     % uniquely communicate with
@@ -259,6 +262,9 @@ classdef  LaserSignal < handle
       % Convert timer from samples to ms
       obj.Timer = double( obj.TimerSamp ) / obj.fs * 1e3 ;
       
+      % Initialisation is finished
+      obj.init = false ;
+      
     end
     
     
@@ -298,8 +304,9 @@ classdef  LaserSignal < handle
       % x is out of range
       if  estr , error( 'New value %s %s''s limits.' , estr , par ) ; end
       
-      % Change the corresponding Gizmo control value.
-      if  spv
+      % Change the corresponding Gizmo control value, unless object is
+      % still initialising
+      if  spv  &&  ~obj.init
         obj.syn.setParameterValue( obj.name , par , x )
       end
       
@@ -316,30 +323,30 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.Timer( obj , x )
+    function  obj = set.Timer( obj , tnew )
     % 
     % First, rounds up to the end of the end of final sinusoidal cycle.
     % Then rounds up to end of next complete TDT sample.
     % 
       
       % Check that x is scalar
-      if  ~ isscalar( x )
+      if  ~ isscalar( tnew )
         error( 'New Time value must be scalar.' )
       end
       
       % First convert from milliseconds to seconds
-      x = x / 1e3 ;
+      x = double( tnew ) / 1e3 ;
+      
+      % Cast sine frequency as double
+      freq = double( obj.Frequency ) ;
       
       % Convert from sec to number of sinusoidal cycles at set frequency.
       % And round up so that we only have complete sinusoidal cycles.
-      cyc = ceil( x * obj.Frequency ) ;
-      
-      % Convert back to seconds
-      x = cyc / obj.Frequency ;
+      cyc = ceil( x * freq ) ;
       
       % Now convert to number of samples. And again, round up to next
       % complete sample.
-      samp = ceil( x * obj.fs ) ;
+      samp = ceil( cyc / freq * obj.fs ) ;
       
       % Finally, assign millisecond value to property
       obj.Timer = samp / obj.fs * 1e3 ;
@@ -366,7 +373,9 @@ classdef  LaserSignal < handle
       
       % But then we update the Timer control in the LaserSignal Gizmo.
       % Becaues that control expects a value in samples.
-      obj.syn.setParameterValue( obj.name , 'Timer' , obj.TimerSamp )
+      if  ~ obj.init
+        obj.syn.setParameterValue( obj.name , 'Timer' , obj.TimerSamp )
+      end
       
     end
     
@@ -381,7 +390,7 @@ classdef  LaserSignal < handle
       cyc = ceil( obj.Timer / 1e3 * obj.Frequency ) ;
       
       % Set new timer value
-      obj.Timer = cyc / obj.Frequency * 1e3 ;
+      if  ~obj.init , obj.Timer = cyc / obj.Frequency * 1e3 ; end
       
     end
 
@@ -398,6 +407,11 @@ classdef  LaserSignal < handle
     
     function  obj = set.Laser0SF( obj , x )
       obj.Laser0SF = obj.chklim( 'Laser0SF' , x ) ;
+    end
+    
+    
+    function  obj = set.Laser0Shift( obj , x )
+      obj.Laser0Shift = obj.chklim( 'Laser0Shift' , x ) ;
     end
     
     
@@ -421,8 +435,11 @@ classdef  LaserSignal < handle
       % Set value
       obj.Plateau = x ;
       
+      % Initialisation, don't change LatchRfTime
+      if  obj.init
+        
       % Plateau enabled
-      if  obj.Plateau
+      elseif  obj.Plateau
         
         % Compute one half-period of the sinusoid at set frequency, in sec
         hp = 0.5 / obj.Frequency ;
@@ -437,7 +454,7 @@ classdef  LaserSignal < handle
         
         obj.LatchRfTime = obj.TimerSamp ;
         
-      end
+      end % eval new LatchRfTime
       
     end
     
