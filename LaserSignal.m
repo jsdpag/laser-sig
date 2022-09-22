@@ -1,20 +1,23 @@
 
 classdef  LaserSignal < handle
 % 
-% LaserSignal uses SynapseAPI to control a specific LaserSignal Gizmo in a
-% running session of Synapse. This allows for automated control of the
-% output from a connected TDT device for the purpose of driving lasers to
-% generate signals with one of two types: 1) -90 deg phase shifted
+% LaserSignal uses SynapseAPI to set the values of the Synapse Controls in
+% a specific instance of the LaserSignal Gizmo that is running in a live
+% session of Synapse. This allows for automated specification of the
+% output from a connected TDT device for the purpose of driving lasers. The
+% signals can be one of two types: 1) -90 deg phase shifted
 % sinusoid, 2) a plateau with sinusoidal rising and falling phase at the
-% start and finish. In fact, this class is only used for setting
-% parameters in the associated Synapse Gizmo. Use DAQ event markers to
-% trigger/abort laser emissions.
+% start and finish. Note that the LaserSignal.m class is only used for
+% setting parameters. See the LaserController Gizmo and class to generate
+% timing signals that trigger the onset and offset of signals from the
+% LaserSignal Gizmo.
 % 
 % NOTE: two lasers can be controlled, each with their own Voltage scaling
 % factor and baseline shift. Hence, values can be chosen that drive the two
 % lasers in the same range of output power values (e.g. in mW). Then, the
-% pre-amp parameter can be treated as the fraction of total output power
-% above baseline, for both lasers.
+% pre-amp parameter SetAmp can be used as a single, intuitive way of
+% setting the desired amplitude of the laser output, in milliWatts, for
+% either laser.
 % 
 % Written by Jackson Smith - August 2022 - Fries Lab (ESI Frankfurt)
 % 
@@ -24,9 +27,9 @@ classdef  LaserSignal < handle
     
     % Mandatory list of parameters (i.e. Gizmo controls) that the
     % LaserSignal Gizmo must have.
-    REQPAR = { 'DAQON' , 'DAQOFF' , 'Timer' , 'PreAmp' , 'Laser0SF' , ...
-      'Laser0Shift' , 'Laser1Shift' , 'Laser1SF' , 'LaserID' , ...
-        'Frequency' , 'LatchRfTime' } ;
+    REQPAR = { 'Timer' , 'SetAmp' , 'Laser0SF' , 'Laser0Shift' , ...
+      'Laser1Shift' , 'Laser1SF' , 'LaserID' , 'Frequency' , ...
+        'LatchRfTime' , 'MaxAmp' } ;
     
     % Mapping of Gizmo control names (field) to class property names
     % (value), where these differ
@@ -37,27 +40,19 @@ classdef  LaserSignal < handle
   
   properties ( AbortSet )
     
-    % DAQ marker that signals the start of laser emission
-    DAQON  uint16
-    
-    % DAQ marker that aborts ongoing laser emission. Note that every event
-    % marker of value DAQON must be followed by some later marker with
-    % value DAQOFF. Only then will a new DAQON marker trigger emission.
-    % Otherwise, repeated markers of value DAQON will be ignored.
-    DAQOFF  uint16
-    
     % Target value of a countdown timer, in ms. This is the value that the
     % timer will aim for. The actual time is dependent on both the
     % sinusoidal frequency and the TDT sampling rate (see below). The timer
-    % begins counting down from this value when an event marker with value
-    % DAQON is received.
+    % begins counting down from this value when the Input-1 (LaserON)
+    % receives a high value (true, 1).
     % 
     % NOTE: Upon setting this value, it is automatically rounded up to the
     % end of the final sinusoidal cycle before being rounded up to the next
     % complete TDT sample, at the given TDT sampling rate and sinusoidal
     % frequency. The rounded value is stored in the TimerUp property. The
     % original target value will be maintained in Timer so that Timer <=
-    % TimerUp.
+    % TimerUp. If the sinusoidal frequency is changed then the TimerUp
+    % value is recalculated from the value stored in Timer.
     % 
     % For example, let Synapse be linked to an RZ2 that samples at
     % 24414.0625Hz, and let the sinusoid have a frequency of 60
@@ -72,15 +67,26 @@ classdef  LaserSignal < handle
     Timer  double
     
     % Frequency of the sinusoidal waveform, in cycles/second i.e. Hz. Upon
-    % setting Frequency, the Timer property is rounded using the same
-    % procedure as when the Timer property is directly set.
+    % setting Frequency, the TimerUp property is calculated using the same
+    % procedure as when the Timer property is set.
     Frequency  single
     
-    % Pre-amplifier scaling factor. A value in range [0,1]. The raw
-    % sinusoidal waveform is scaled/shifted to range [0,1]. Then the pre-
-    % amp scaling factor is applied. Afterwards, the conversion to Volts is
-    % applied separately for each laser.
-    PreAmp  single
+    % The target amplitude of the laser output, in milliWatts. The raw
+    % sinusoidal signal spans [0,1] from peak to trough. This is multiplied
+    % by the SetAmp value, then divided by MaxAmp, producing a sinusoid in
+    % the range [0,1]. It is interpreted as the fraction of the total
+    % output value. The laser-specific scaling and shifting factors are
+    % then applied to transform the fraction into a corresponding Voltage
+    % value, such that the peak voltage drives the laser at SetAmp. Note!
+    % If SetAmp > MaxAmp then the LaserSignal Gizmo will not produce
+    % output.
+    SetAmp  single
+    
+    % The maximum power output of the lasers when driven at their maximum
+    % input voltage. This should be the maximum measured output as it is
+    % when delivered to the target tissue rather than the maximum output of
+    % the laser at source.
+    MaxAmp  single
     
     % Laser identifier. Specifies with pair of analogue/TTL outputs of the
     % linked LaserSignal Gizmo will generate non-zero output when laser
@@ -130,11 +136,6 @@ classdef  LaserSignal < handle
     
     % Initialisation flag. Lower when all init is finished.
     init = true ;
-    
-    % List of parameters that we would like to read from on a regular
-    % basis e.g. to store values used on each trial. NOTE! This will be
-    % concatenated with REQPAR during initialisation.
-    GETPAR = { 'name' , 'parent' , 'fs' , 'TimerUp' , 'TimerSamp' } ;
     
     % Name of specific LaserSignal Gizmo, a given instance in the Synapse
     % experiment, that this instance of the MATLAB LaserSignal class will
@@ -237,9 +238,6 @@ classdef  LaserSignal < handle
       
       %-- Initialise remaining object parameters --%
       
-      % Create full list of 'get' parameter names
-      obj.GETPAR = [ obj.REQPAR , obj.GETPAR ] ;
-      
       % Information about the named Gizmo
       obj.info = syn.getGizmoInfo( nam ) ;
       
@@ -247,7 +245,7 @@ classdef  LaserSignal < handle
       obj.parent = syn.getGizmoParent( nam ) ;
       
       % Parent device sampling rate
-      obj.fs = getfield( syn.getSamplingRates , obj.parent ) ;
+      obj.fs = getfield( syn.getSamplingRates , obj.parent ) ; %#ok
       
       % Initialise parameter info with field-less struct
       obj.ipar = struct ;
@@ -257,9 +255,6 @@ classdef  LaserSignal < handle
         
         % Retrieve parameter info
         obj.ipar.( par ) = syn.getParameterInfo( nam , par ) ;
-        
-        % Find index of param name in list of Gizmo controls
-        i = strcmp( par , obj.REQPAR ) ;
         
         % Gizmo control maps to MATLAB object parameter named ...
         if  isfield( obj.PARMAP , par )
@@ -300,8 +295,9 @@ classdef  LaserSignal < handle
     % x = chklim( obj , par , x ). Check whether value x is within the
     % valid range that is required by the obj parameter named par. x is
     % returned without modification if is within the parameter's range.
-    % Otherwise, an error is issued. As an added bonus, issues an error if
-    % x is not scalar.
+    % Otherwise, an error is issued. As added bonuses, issues an error if
+    % x is not scalar, and sets new value to corresponding Gizmo control if
+    % the LaserSignal object has finished initialisation.
     %
       
       % x must be scalar
@@ -332,17 +328,39 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.DAQON( obj , x )
-      obj.DAQON = obj.chklim( 'DAQON' , x ) ;
+    function  set.SetAmp( obj , x )
+      
+      % Check for scalar value
+      if  ~ isscalar( x )
+        
+        error( 'New SetAmp value must be scalar.' )
+        
+      % New value must NOT exceed MaxAmp
+      elseif  x > obj.MaxAmp
+        
+        error( 'New SetAmp value is greater than MaxAmp.' )
+        
+      end % input error check
+      
+      % Further error checking, and set Gizmo control value
+      obj.SetAmp = obj.chklim( 'SetAmp' , x ) ;
+      
     end
     
     
-    function  obj = set.DAQOFF( obj , x )
-      obj.DAQOFF = obj.chklim( 'DAQOFF' , x ) ;
+    function  set.MaxAmp( obj , x )
+      
+      % Set Gizmo control
+      obj.MaxAmp = obj.chklim( 'MaxAmp' , x ) ;
+      
+      % New MaxAmp value is less than current SetAmp value, so assign
+      % SetAmp to its maximum valid value
+      if  obj.MaxAmp < obj.SetAmp , obj.SetAmp = obj.MaxAmp ; end
+      
     end
     
     
-    function  obj = set.Timer( obj , x )
+    function  set.Timer( obj , x )
     %
     % Assign new target duration for the timer, in milliseconds
     %
@@ -359,7 +377,7 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.TimerUp( obj , x )
+    function  set.TimerUp( obj , x )
     % 
     % First, rounds up to the end of the end of final sinusoidal cycle.
     % Then rounds up to end of next complete TDT sample.
@@ -389,7 +407,7 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.TimerSamp( obj , x )
+    function  set.TimerSamp( obj , x )
       
       % Assign value. Input arg string refers to the Gizmo control.
       obj.TimerSamp = obj.chklim( 'Timer' , x ) ;
@@ -400,7 +418,7 @@ classdef  LaserSignal < handle
     end
     
     
-    function  obj = set.Frequency( obj , newfreq )
+    function  set.Frequency( obj , newfreq )
       
       % Initialisation phase, set value and quit
       if  obj.init , obj.Frequency = newfreq ; return , end
@@ -412,44 +430,39 @@ classdef  LaserSignal < handle
       obj.TimerUp = obj.Timer ;
       
     end
-
-
-    function  obj = set.PreAmp( obj , x )
-      obj.PreAmp = obj.chklim( 'PreAmp' , x ) ;
-    end
     
     
-    function  obj = set.LatchRfTime( obj , x )
+    function  set.LatchRfTime( obj , x )
       obj.LatchRfTime = obj.chklim( 'LatchRfTime' , x ) ;
     end
     
     
-    function  obj = set.LaserID( obj , x )
+    function  set.LaserID( obj , x )
       obj.LaserID = obj.chklim( 'LaserID' , x ) ;
     end
     
     
-    function  obj = set.Laser0SF( obj , x )
+    function  set.Laser0SF( obj , x )
       obj.Laser0SF = obj.chklim( 'Laser0SF' , x ) ;
     end
     
     
-    function  obj = set.Laser0Shift( obj , x )
+    function  set.Laser0Shift( obj , x )
       obj.Laser0Shift = obj.chklim( 'Laser0Shift' , x ) ;
     end
     
     
-    function  obj = set.Laser1SF( obj , x )
+    function  set.Laser1SF( obj , x )
       obj.Laser1SF = obj.chklim( 'Laser1SF' , x ) ;
     end
     
     
-    function  obj = set.Laser1Shift( obj , x )
+    function  set.Laser1Shift( obj , x )
       obj.Laser1Shift = obj.chklim( 'Laser1Shift' , x ) ;
     end
     
     
-    function  obj = set.Plateau( obj , x )
+    function  set.Plateau( obj , x )
       
       % Check that new value is scalar
       if  ~ isscalar( x )
