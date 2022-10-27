@@ -65,6 +65,13 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %   LaserTester Wavelength number e.g. 0 might indicate a green laser and 1
 %   might indicate yellow. The 'index' parameter simply specifies which of
 %   the two lasers to use during measurement testing. Default 0.
+% 
+% 'ttlinvert' - If laser requires digital input control signal then the
+%   LaserTester will feed a TTL signal with 0 to block emission and 1 to
+%   enable emission, by default (ttlinvert is 0). But the logic
+%   can be inverted by setting ttlinvert to 1. In this case, an output
+%   signal of 1 blocks emission, and an output of 0 enables emission.
+%   Default ttlinvert 0.
 %
 % 'measurement' - String naming the method of measurement. This defaults to
 %   'manual'. Supported modes of measurement include:
@@ -82,9 +89,9 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %     actions when prompted. 1) Change the PM100D measurement range. 2)
 %     Block or disable then unblock/enable the laser to measure the PM100D
 %     output with zero emissions. PM100D output is converted to mW from
-%     volts by ( V - V_0 ) / 2.6 * Pmax where V is the measured voltage,
-%     V_0 is the voltage with zero emission, 2.6 is the maximum output of
-%     the PM100D, and Pmax is the wavelength-corrected maximum power
+%     volts by ( V - V_0 ) / 2.0 * Pmax where V is the measured voltage,
+%     V_0 is the voltage with zero emission, 2.0 is the PM100D output
+%     voltage at Pmax, and Pmax is the wavelength-corrected upper range
 %     currently set in the PM100D. Signal Accumulator Gizmo must be set as
 %     follows: PM100D voltage fed to input called 'Input'; General>Control
 %     set to 'Strobe Input'; General Tab check boxes enabled 'Compute
@@ -94,6 +101,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %     'Main'.
 % 
 % Measurement method specific parameters exist for the following methods.
+% These all have a prefix of the form <method>_ e.g. pm100d_.
 % 
 %   'manual' - There are no parameters specific to this method.
 %   
@@ -117,12 +125,13 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %     'pm100d_magnitudes' - A series of magnitudes of amplification for the
 %       PM100D power measurements. These are multiplied into the given
 %       coefficient to determine the absolute ranges available. Given as a
-%       vector of decimal values. Default [ 0.01 , 0.1 , 1 , 10 , 100 ].
+%       vector of decimal values. Default [ 0.01 , 0.1 , 1 , 10 , 100 , 
+%       1000 ].
 %     
 %     'pm100d_threshold' - A scalar value in the range (0,1] taken as a
-%       fraction of the current upper limit of the PM100D measurement
+%       fraction of the current range limit of the PM100D measurement
 %       range. Once this is exceeded, the user is prompted to increase the
-%       measurement range in the PM100D. Default 0.75.
+%       measurement range in the PM100D. Default 0.95.
 %     
 %     'pm100d_signalaccumulator' - Names the Signal Accumulator Gizmo from
 %       which the average voltage output of the PM100D is to be read.
@@ -161,12 +170,13 @@ function  in2out = LaserInputOutputMeasure( varargin )
   par.input = 50 ;
   par.range = [ 0 , 5 ] ;
   par.index = 0 ;
+  par.ttlinvert = 0 ;
   par.measurement = 'manual' ;
 
   % Set pm100d specific parameter
   par.pm100d_coefficient = 4.5 ;
-  par.pm100d_magnitudes = [ 0.01 , 0.1 , 1 , 10 , 100 ] ;
-  par.pm100d_threshold = 0.75 ;
+  par.pm100d_magnitudes = [ 0.01 , 0.1 , 1 , 10 , 100 , 1000 ] ;
+  par.pm100d_threshold = 0.95 ;
   par.pm100d_signalaccumulator = 'AvgPMvolts' ;
   par.pm100d_timer = 1 ;
 
@@ -179,6 +189,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
   val.range = @( x ) validnumbers( x , [ 0 , 5.5 ] , 2 ) && ...
                      x( 2 ) > x( 1 ) ;
   val.index = @( x ) validnumbers( x , [ 0 , 1 ] , 1 , true ) ;
+  val.ttlinvert = @( x ) validnumbers( x , [ 0 , 1 ] , 1 , true ) ;
   val.measurement = @( s ) validstring( s , C.measurements ) ;
 
   val.pm100d_coefficient = @( x ) validnumbers( x, [ realmin , Inf ], 1 ) ;
@@ -192,39 +203,34 @@ function  in2out = LaserInputOutputMeasure( varargin )
   
   % Check number of input/output args
   nargoutchk( 0 , 1 )
+  
+  % Name/Value pairs imply nargin must be multiple of 2
+  if  mod( nargin , 2 )
+    error( 'Requires Name/Value input argument pairs i.e. even arg count' )
+  end
 
-  % There are input arguments
-  if  nargin
+  % Input arg pairs
+  for  i = 1 : 2 : nargin - 1
 
-    % Name/Value pairs imply nargin must be multiple of 2
-    if  mod( nargin , 2 )
-      error( 'Requires Name/Value input argument pairs.' )
-    end
+    % Map Name/Value pair to meaningful variables
+    [ Name , Value ] = varargin{ i : i + 1 } ;
 
-    % Input arg pairs
-    for  i = 1 : 2 : nargin - 1
+    % Parameter name is uknown
+    if  ~ isfield( par , Name )
 
-      % Map Name/Value pair to meaningful variables
-      [ Name , Value ] = varargin{ i : i + 1 } ;
+      error( 'Uknown parameter name %s' , Name )
+    
+    % Validity check on new value
+    elseif  ~ val.( Name )( Value )
 
-      % Parameter name is uknown
-      if  ~ isfield( par , Name )
+      error( 'Invalid value for parameter %s' , Name )
 
-        error( 'Uknown parameter name %s' , Name )
-      
-      % Validity check on new value
-      elseif  ~ val.( Name )( Value )
+    end % param check
 
-        error( 'Invalid value for parameter %s' , Name )
+    % Assign new value
+    par.( Name ) = Value ;
 
-      end % param check
-
-      % Assign new value
-      par.( Name ) = Value ;
-
-    end % arg pairs
-
-  end % input args
+  end % arg pairs
 
 
   %%% Initialisation %%%
@@ -234,19 +240,23 @@ function  in2out = LaserInputOutputMeasure( varargin )
 
     % Just one value, return upper range limit
     if  par.input == 1
+
       par.input = par.range( 2 ) ;
+
     % Generate evenly spaced values
     else
+
       par.input = ( 0 : par.input - 1 ) ./ ( par.input - 1 ) .* ...
         diff( par.range ) + par.range( 1 ) ;
-    end
+
+    end % make input values
 
   % All input voltages in range?
-  elseif  ~all( par.range( 1 ) <= par.input & par.input <= par.range( 2 ) )
+  elseif ~ all( par.range( 1 ) <= par.input & par.input <= par.range( 2 ) )
 
     error( 'Input voltages not in range.' )
 
-  % par.input is a row vector
+  % Guarantee that par.input is a row vector
   elseif  ~ isrow( par.input )
 
     par.input = reshape( par.input , 1 , numel( par.input ) ) ;
@@ -256,6 +266,13 @@ function  in2out = LaserInputOutputMeasure( varargin )
   % Initialise output
   in2out.input_V = par.input ;
   in2out.output_mW = zeros( size( par.input ) ) ;
+
+  % Number of measurements
+  N = numel( par.input ) ;
+
+  % Define a TTL logic scheme that converts 0 (false) and 1 (true) input to
+  % the correct value
+  fttl = @( x ) abs( par.ttlinvert - x ) ;
 
   % Connect to Synapse
   syn = SynapseAPI( par.host ) ;
@@ -267,28 +284,78 @@ function  in2out = LaserInputOutputMeasure( varargin )
     error( 'Failed to connect to Synapse on host %s' , par.host )
   end
 
+  % Get list of Synapse gizmos, add this to constants list
+  C.G = syn.getGizmoNames ;
+
+  % Check that LaserTester Gizmo is there
+  if  ~ any( strcmp( par.lasertester , C.G ) )
+    error( 'Synapse missing LaserTester Gizmo called %s', par.lasertester )
+  end
+
   % Guarantee run-time mode
   if  ~ validstring( init.modestring , C.runtimestr )
+    setsynapsemode( C , syn , C.runtimedef )
+  end
 
-    % Send request
-    syn.setModeStr( C.runtimedef )
+  % Select measurement method and perform specific initialisation tasks
+  switch  par.measurement
+    case  'manual' , fmeasure = @fmeasure_manual ;
+                     mdat = finit_manual( C , par , syn ) ;
+    case  'pm100d' , fmeasure = @fmeasure_pm100d ;
+                     mdat = finit_pm100d( C , par , syn ) ;
+  end % measure method
 
-    % Verify
-    for  i = 1 : C.modechecks , pause( C.modepause )
 
-      % Synapse is now in requested mode
-      if  strcmp( syn.getModeStr , C.runtimedef )
-        break
+  %%% Measure Laser's Input/Output transfer function %%%
 
-      % Maximum number of checks but all of them failed verification
-      elseif  i == C.modechecks
-        error( 'Failed to set Synapse into runtime mode %s', C.runtimedef )
-      end % cases
+  % Input voltage index initialise to first input value
+  i = 1 ;
 
-    end % verify
-  end % run time mode
+  % Print headers on each column
+  fprintf( 'Input(V),Output(mW)\n' ) ;
 
+  % Set LaserTester so that selected laser is enabled
+  syn.setParameterValue( par.lasertester , 'Wavelength' , par.index ) ;
+  syn.setParameterValue( par.lasertester ,     'Enable' , fttl( 1 ) ) ;
+
+  % Input measurements , fetch current input voltage
+  while  i <= N , V = in2out.input_V( i ) ;
+
+    % Set laser's input voltage
+    syn.setParameterValue( par.lasertester , 'VoltsSF' , V ) ;
+
+    % Show value being measured
+    fprintf( '%.3fV,' , V )
+
+    % Measure output
+    [ mW , mdat ] = fmeasure( par , mdat , syn , V ) ;
+
+    % Invalid measurement, repeat
+    if  isempty( mW ) , continue , end
+
+    % Store measurement
+    in2out.output_mW( i ) = mW ;
+
+    % Increment to next measurement
+    i = i + 1 ;
+
+  end % input measurements
   
+  
+  %%% Done %%%
+
+  % Disable laser
+  syn.setParameterValue( par.lasertester , 'VoltsSF' , 0         ) ;
+  syn.setParameterValue( par.lasertester ,  'Enable' , fttl( 0 ) ) ;
+
+  % Re-set initial  Synapsemode string, if different
+  if  ~ strcmp( init.modestring , syn.getModeStr )
+    setsynapsemode( C , syn , init.modestring )
+  end
+
+  % Report
+  fprintf( '\nDone\n' )
+
 
 end % LaserInputOutputMeasure
 
@@ -331,4 +398,163 @@ function  y = validnumbers( x , lim , nval , int )
   end
 
 end % validnumbers
+
+
+%%% Utilities %%%
+
+% Robustly set Synapse mode string, or time out and throw error
+function  setsynapsemode( C , syn , modestr )
+  
+  % Send request
+  syn.setModeStr( modestr )
+
+  % Verify
+  for  i = 1 : C.modechecks , pause( C.modepause )
+
+    % Synapse is now in requested mode
+    if  strcmp( syn.getModeStr , modestr )
+
+      return
+
+    % Maximum number of checks but all of them failed verification
+    elseif  i == C.modechecks
+
+      error( 'Failed to set Synapse into runtime mode %s', modestr )
+
+    end % cases
+  end % verify
+end % setsynapsemode
+
+
+% Take a measurement from PM100D via the Signal Accumulator Gizmo
+function  avg = pm100d_volts( par , syn )
+  
+  % Raise Signal Accumulator strobe to start averaging power meter Aout
+  syn.setParameterValue( par.pm100d_signalaccumulator , 'Strobe' , 1 ) ;
+
+  % Wait to accumulate average
+  pause( par.pm100d_timer ) ;
+
+  % Take PM100 Aout measurement from Signal Accumulator, in Volts
+  avg = syn.getParameterValue( par.pm100d_signalaccumulator , 'out_Main' );
+
+  % Finished measurement, lower Signal Accumulator strobe
+  syn.setParameterValue( par.pm100d_signalaccumulator , 'Strobe' , 0 ) ;
+
+end % pm100d_volts
+
+
+%%% Measurement initialisation functions %%%
+
+% All functions have form: finit( C , par , syn )
+% Method specific initialisation steps are performed given main function
+% constants C, parameters par, and open SynapseAPI object syn.
+
+% Manual method requires no initialisation
+function  mdat = finit_manual( ~ , ~ , ~ ) , mdat = [ ] ; end
+
+
+% PM100D method must check for existance of Signal Accumulator Gizmo that
+% averages the meter's analogue output. mdat is a struct that stores which
+% magnitude of amplification the PM100D is currently using, and also a zero
+% measurement of the PM100D Aout when the laser emission is blocked.
+% Optionally, mdat is fourth input argument, in which case the next
+% amplification level index is used, instead of starting from 1. If C is
+% empty then skips check for Signal Accumulator gizmo.
+function  mdat = finit_pm100d( C , par , syn , mdat )
+  
+  % Check that Signal Accumulator Gizmo is there
+  if  ~ isempty( C )  &&  ...
+      ~ any( strcmp( par.pm100d_signalaccumulator , C.G ) )
+    error( 'Synapse missing Signal Accumulator Gizmo called %s' , ...
+      par.pm100d_signalaccumulator )
+  end
+
+  % Increment PM100D amp. level index if mdat is fourth input arg
+  if  nargin > 3
+
+    mdat.i = mdat.i + 1 ;
+
+  else % Otherwise, initialise to first amp. level
+
+    mdat.i = 1 ;
+
+  end % input arg index
+
+  % PM100D amplification value in mW
+  mdat.amp = par.pm100d_coefficient * par.pm100d_magnitudes( mdat.i ) ;
+
+  % Request that user set this amplification range on PM100D. First, 
+  % create message to user.
+  msg = sprintf( [ 'Please set PM100D Manual range to %.3fmW.\n' , ...
+    'Click OK when done.' ] , mdat.amp ) ;
+
+  % Then prompt user to manually set PM100D measurement range.
+  waitfor( warndlg( msg ) )
+
+  % Prompt user to block laser emission
+  waitfor( warndlg( [ 'Please block laser emission for zero ' , ...
+    'measurement.' , newline , 'Click OK when done.' ] ) )
+  
+  % Take zero measurement
+  mdat.V0 = pm100d_volts( par , syn ) ;
+
+  % Prompt user to unblock laser emission
+  waitfor( warndlg( [ 'Please un-block laser emission.' , newline , ...
+    'Click OK when done.' ] ) )
+  
+end % finit_pm100d
+
+
+%%% Measurement methods %%%
+
+% All functions have form: mW = fmeasure( par , mdat , syn , V )
+% Returning scalar mW value from laser for given V input to laser. If mW is
+% empty [ ] then measurement failed and will be repeated. par is the
+% parameter struct in the main function method. mdat is returned by the
+% finit function and maintains method-specific information about the
+% measurement's state.
+
+% Manually type the power measurement at each voltage input
+function  [ mW , mdat ] = fmeasure_manual( ~ , mdat , ~ , ~ )
+  
+  % Retrieve input from user
+  mW = input( '' , 's' ) ;
+
+  % Convert to double floating point value
+  mW = str2double( mW ) ;
+
+  % Not a valid numeric input, return empty
+  if  ~ validnumbers( mW , [ 0 , Inf ] , 1 ) , mW = [ ] ; end
+
+  % Otherwise, show unit
+  fprintf( '\bmW\n' )
+  
+end % fmeasure_manual
+
+
+% Semi-automated measurement of laser power output from a PM100D meter
+function  [ mW , mdat ] = fmeasure_pm100d( par , mdat , syn , ~ )
+  
+  % Measure PM100D output in volts
+  Vout = pm100d_volts( par , syn ) ;
+
+  % Convert from V to mW
+  mW = ( Vout - mdat.V0 ) / 2.0 * mdat.amp ;
+  
+  % mW output exceeds threshold, go to next amp level and return empty to
+  % signal that the input voltage should stay the same
+  if  mW > par.pm100d_threshold * mdat.amp
+
+    mdat = finit_pm100d( [ ] , par , syn , mdat ) ;
+      mW = [ ] ;
+
+  % Measurement is in range, print the result
+  else
+
+    fprintf( '%.3fmW\n' , mW )
+
+  end
+  
+end % fmeasure_manual
 
