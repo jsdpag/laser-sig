@@ -34,3 +34,7 @@ Matlab class that uses SynapseAPI to set parameters in a named LaserController.r
 
 Partially or fully automate the measurement of a laser's transfer function. The input to the laser is a constant analogue voltage. The output is the measured power of the laser's emission, in milliWatts. Uses SynapseAPI to control analogue voltage control signals via a named LaserTester.rcx Gizmo. Optionally, it can be configured to read the analoge voltage output of a power meter e.g. a PM100D in order to further automate measurement.
 
+## transfer.m
+
+Laser transfer function, computing power output (e.g. in mW) from given analogue voltage input (e.g. in Volts). Also implements the inverse transfer function. Models initial relationship as a power function that switches to a linear relationship above a given input threshold. This sort of function is suitable for modelling input/output relationship of a diode laser such as the Omicron Laserage LuxX+. To set the laser at a specific value, use the inverse function to get the required input for the laser.
+
