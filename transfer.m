@@ -37,6 +37,9 @@ function  Y = transfer( C , X , invflg )
   validnumber( C , 'C' )
   validnumber( X , 'X' )
   
+  % Signal use of regular forward transfer function by default
+  inv = false ;
+
   % Check for third input arg
   if  nargin > 2
 
@@ -50,12 +53,6 @@ function  Y = transfer( C , X , invflg )
       case  '-inverse' , inv = true ; % Signal inverse transfer function
       otherwise , error( 'Invalid 3rd input arg, expecting ''-inverse''' )
     end
-
-  % No third input arg
-  else
-
-    % Signal use of regular forward transfer function
-    inv = false ;
 
   end % 3rd input arg
   
@@ -115,11 +112,13 @@ end
 function  validnumber( A , name )
   
   % Evaluate array for validity. This is what we want to have.
-  val = isa( A , 'double' )  &&  isreal( A )  &&  all( isfinite( A ) ) ;
+  val = isa( A , 'double' ) && isreal( A ) && all( isfinite( A ) ) && ...
+    all( A >= 0 , 'all' ) ;
 
   % Invalid number, raise an error
   if  ~ val
-    error( '%s must be a real-valued, finite, double array' , name )
+    error( [ '%s must be a real-valued, finite, zero or positive ' , ...
+      'double array' ] , name )
   end
 
 end % validnumber
