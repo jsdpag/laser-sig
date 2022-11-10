@@ -13,3 +13,24 @@ For automated control of up to two lasers in a single session. This is capable o
 ## LaserSignal.m
 
 MATLAB class for setting control parameters of the LaserSignal.rcx Synapse Gizmo from a remote PC. E.g. LaserSignal.m can be used in an ARCADE task script, when Synapse and ARCADE run on separate PCs. An instance of this class is uniquely linked to a given instance of the LaserSignal.rcx Gizmo that is visible in the current Synapse experiment. LaserSignal.m object parameters correspond to those in the Gizmo. However, the units are more intuitive e.g. using milliseconds for the Time parameter, rather than number of samples. In addition, LaserSignal.m can toggle a 'plateau' mode on or off, in which the first and last peak of the sinusoidal voltage trace are either linked by a flat line (plateau on) or not (plateau off); in the latter case, the complete sinusoid is output by the Gizmo.
+
+## LaserController.rcx
+
+The LaserController Gizmo is intended to control the joint timing of the LaserSignal Gizmo and event-triggered buffering Gizmos. It can initiate both processes based on an incoming 16-bit event code. Optionally, it can also wait for a visual photodiode trace to cross a threshold. Hence, the timing of the laser emission and the buffering can be triggered at an arbitrary time, or locked to a visual event on the stimulus monitor.
+  
+The photodiode signal must cross a set threshold in a specific direction (rising or falling through). In addition, all further threshold crossings will be ignored for a set duration, to filter out possible noise.
+  
+A delay can be imposed upon the onset of the laser emission. This might be needed to simulate the visual latency of the target site when triggering the laser and buffer with a visual event. However, the buffering trigger will always occur as soon as the necessary event marker and photodiode conditions are satisfied.
+  
+Optionally, the laser onset event markers can be ignored in favour of a manual trigger button presented by Synapse.
+  
+A liberal laser de-activation signal is triggered in response to one of three possible events. Two event marker codes can be tested for. One can be a late but guaranteed event e.g. end of trial. The second can be an early but optional event e.g. behavioural response. The third possibility is the release of the manual trigger button.
+
+## LaserController.m
+
+Matlab class that uses SynapseAPI to set parameters in a named LaserController.rcx Gizmo.
+
+## LaserInputOutputMeasure.m
+
+Partially or fully automate the measurement of a laser's transfer function. The input to the laser is a constant analogue voltage. The output is the measured power of the laser's emission, in milliWatts. Uses SynapseAPI to control analogue voltage control signals via a named LaserTester.rcx Gizmo. Optionally, it can be configured to read the analoge voltage output of a power meter e.g. a PM100D in order to further automate measurement.
+
