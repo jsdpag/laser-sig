@@ -38,3 +38,7 @@ Partially or fully automate the measurement of a laser's transfer function. The 
 
 Laser transfer function, computing power output (e.g. in mW) from given analogue voltage input (e.g. in Volts). Also implements the inverse transfer function. Models initial relationship as a power function that switches to a linear relationship above a given input threshold. This sort of function is suitable for modelling input/output relationship of a diode laser such as the Omicron Laserage LuxX+. To set the laser at a specific value, use the inverse function to get the required input for the laser.
 
+## transcoef.m
+
+A convenience function that finds the best-fitting set of coefficients for the laser transfer function transfer( ) using least-squares, non-linear regression.
+
