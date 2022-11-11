@@ -133,6 +133,28 @@ function  makelasertable( varargin )
     error( 'All input number must be positive integers.' )
   end
 
+  % Method-specific arg check
+  switch  par.measurement
+
+    % Make sure that all wavelengths have an entry in the PM100D
+    % coefficient lookup table
+    case  'pm100d'
+
+      % Make all possible lookup table parameter names
+      pnam = arrayfun( @( w ) sprintf( 'pm100d_coef_%dnm' , w ) , wlen ,...
+        'UniformOutput' , false ) ;
+
+      % Missing wavelength coefficient
+      i = ~ isfield( par , pnam ) ;
+
+      % Report missing wavelength coefficients
+      if  any( i )
+        error( [ 'makelasertable.csv missing pm100d_coef_*nm entry ' , ...
+          'for wavelengths: %s' ] , strjoin( varargin( i ) , ' , ' ) )
+      end
+
+  end % measurement specific
+
 
   %%% Measure transfer functions %%%
 
@@ -150,9 +172,9 @@ function  makelasertable( varargin )
       % Semi-automated measurement using ThorLabs PM100D.
       case  'pm100d'
 
-        % Determine wavelength coefficient field name. Then parse value.
-        fnam = sprintf( 'pm100d_coef_%dnm' , wlen( i ) ) ;
-        vargin = { 'pm100d_coefficient' , str2double( par.( fnam ) ) } ;
+        % Determine wavelength coefficient field name.
+        pnam = sprintf( 'pm100d_coef_%dnm' , wlen( i ) ) ;
+        vargin = { 'pm100d_coefficient' , str2double( par.( pnam ) ) } ;
 
     end % method specific args
 
