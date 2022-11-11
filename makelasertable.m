@@ -103,7 +103,7 @@ function  makelasertable( varargin )
   end
   
   % Allocate vector of laser wavelengths to measure
-  wlen = zeros( N , 1 ) ;
+  wlen = zeros( 1 , N ) ;
 
   % Input args
   for  i = 1 : N
@@ -179,9 +179,8 @@ function  makelasertable( varargin )
     end % method specific args
 
     % Prompt user to set the measurement device for this laser's wavelength
-    waitfor( warndlg( [ ...
-      'Please prepare to measure %dnm laser power output.' , newline , ...
-        'Click OK when done.' ] ) )
+    waitfor( warndlg( [ 'Please prepare to measure ' , varargin{ i } , ...
+      'nm laser power output.' , newline , 'Click OK when done.' ] ) )
 
     % Measure this laser's transfer function
     in2out{ i } = LaserInputOutputMeasure( CARGIN{ : } , vargin{ : } ) ;
@@ -218,16 +217,16 @@ function  makelasertable( varargin )
   txt.coef = cell( 1 , N + 1 ) ;
 
   % Define header
-  txt.coef{ 1 } = 'index,nm,B,M,P,v0' ;
+  txt.coef{ 1 } = [ 'index,nm,B,M,P,v0' , newline ] ;
 
   % Lasers
   for  i = 1 : N
-    txt.coef{ i + 1 } = sprintf( '%d,%d,%.9f,%.9f,%.9f,%.9f' , ...
+    txt.coef{ i + 1 } = sprintf( '%d,%d,%.9f,%.9f,%.9f,%.9f\n' , ...
       i - 1 , wlen( i ) , C( i , : ) ) ;
   end
 
   % Concatenate into string with newlines
-  txt.coef = strjoin( txt.coef , '\n' ) ;
+  txt.coef = [ txt.coef{ : } ] ;
 
   % Now allocate for the measured transfer functions
   txt.meas = cell( 1 , 2 ) ;
@@ -293,7 +292,7 @@ function  makelasertable( varargin )
     % Labels
     xlabel( 'Input Volts' )
     ylabel( 'Emission power (mW)' )
-    title( sprintf( 'Laser%d_%dnm' , i - 1 , wlen( i ) ) )
+    title( sprintf( 'Laser%d\\_%dnm' , i - 1 , wlen( i ) ) )
 
   end % lasers
 
