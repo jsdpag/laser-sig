@@ -4,10 +4,55 @@ function  makelasertable( varargin )
 % makelasertable wlen0 [wlen1] [wlen2] ...
 % 
 % Helper function that partially automates the process of measuring and
-% estimating the transfer function for a set of lasers. 
-
-% then writing a CSV
-% table called 'lasers.csv' that 
+% estimating the transfer function for a set of lasers. The results are
+% written to ASCII CSV files that can readily be imported for use into e.g.
+% an ARCADE task for setting laser parameters using the laser-signals
+% library.
+%
+% Input arguments must be classic strings (char row vectors), which is the
+% case if the function is invoked in the style of a system command line.
+% 
+%   e.g. >> makelasertable 505 633
+%
+% Each argument refers to a separate laser. The position of the argument is
+% counted from left to right starting with 0, and incrementing once per
+% argument. Hence, the exmaple above has arguments that occupy positions 0
+% and 1. The argument's position is taken as the laser's index in the
+% LaserTester Gizmo that will be used to control the input voltage, and
+% tells the Gizmo which set of outputs to use; each set being linked to a
+% separate laser.
+% 
+% The argument itself must name the wavelength of the laser, in nanometres
+% (nm). Again, the example above shows that lasers 0 and 1 have wavelengths
+% of 505nm and 633nm.
+% 
+% The user is prompted to set up the measurement for each laser, according
+% to its wavelength and the specified measurement method. Once the transfer
+% functions have all been empirically measured, they are fit using the
+% transcoef( ) function to find the best-fitting coefficients for the
+% transfer( ) function.
+% 
+% The laser index (arg position), wavelength, and best-fitting coefficients
+% are written to a CSV table. Separately, the empirical input to output
+% measurements are also written in another CSV table.
+% 
+% Parameters that control this sequence are set in the makelasertable.csv
+% file that exists in the same directory as the makelasertable.m file. Each
+% line specifies a separate parameter with the format <name>,<value>.
+% 
+% tabledir, coefftable, and powertable name the parent directory,
+% coefficient table file name, and empirical measurement file name,
+% respectively.
+% 
+% All other parameters are Name/Value input argument pairs that are defined
+% by LaserInputOutputMeasure (see help for that function). The exception
+% are parameters with names following the format pm100d_coef_<wave>nm in
+% which <wave> is a given integer wavelength. Collectively, these
+% parameters become a lookup table that makelasertable uses to find the
+% correct value of the LaserInputOutputMeasure's pm100d_coefficient
+% parameter.
+% 
+% Written by Jackson Smith - November 2022 - Fries Lab (ESI Frankfurt)
 % 
   
   

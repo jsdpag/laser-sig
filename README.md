@@ -42,3 +42,7 @@ Laser transfer function, computing power output (e.g. in mW) from given analogue
 
 A convenience function that finds the best-fitting set of coefficients for the laser transfer function transfer( ) using least-squares, non-linear regression.
 
+## makelasertable.m
+
+Helper function that partially automates the process of measuring and estimating the transfer function for a set of lasers. The results are written to ASCII CSV files that can readily be imported for use into e.g. an ARCADE task for setting laser parameters using the laser-signals library.
+
