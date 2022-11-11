@@ -1,0 +1,12 @@
+tabledir,.
+coefftable,lasers.csv
+powertable,laserpower_mW.csv
+host,ESI-WSFRI037
+lasertester,LaserTester1
+input,200
+measurement,pm100d
+pm100d_signalaccumulator,AvgPMvolts
+pm100d_timer,0.5
+pm100d_coef_505nm,4.5
+pm100d_coef_594nm,3.1
+pm100d_coef_633nm,???
