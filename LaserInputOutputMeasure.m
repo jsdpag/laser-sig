@@ -127,6 +127,15 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %       coefficient to determine the absolute ranges available. Given as a
 %       vector of decimal values. Default [ 0.01 , 0.1 , 1 , 10 , 100 , 
 %       1000 ].
+%
+%     'pm100d_initmagnitude' - The starting magnitude, given as one of the
+%       values listed in pm100d_magnitudes. Be careful to make sure that
+%       any new value for pm100d_initmagnitude is given after any new value
+%       for pm100d_magnitudes i.e.
+%       LaserInputOutputMeasure(... 'pm100d_magnitudes'    , newmags ,
+%                               ... 'pm100d_initmagnitude' , newinit , ...)
+%       Otherwise the new starting magnitude will be checked for validity
+%       against the wrong set of amplificaiton magnitudes. Default 0.01.
 %     
 %     'pm100d_threshold' - A scalar value in the range (0,1] taken as a
 %       fraction of the current range limit of the PM100D measurement
@@ -142,6 +151,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %       Gizmo's Strobe parameter is raised from 0 to 1. A timer runs for
 %       the set duration. The measurement is taken. And the Strobe
 %       parameter is lowered again. Default 1.0.
+%
 % 
 % Written by Jackson Smith - October 2022 - Fries Lab (ESI Frankfurt)
 % 
@@ -176,6 +186,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
   % Set pm100d specific parameter
   par.pm100d_coefficient = 4.5 ;
   par.pm100d_magnitudes = [ 0.01 , 0.1 , 1 , 10 , 100 , 1000 ] ;
+  par.pm100d_initmagnitude = 0.01 ;
   par.pm100d_threshold = 0.95 ;
   par.pm100d_signalaccumulator = 'AvgPMvolts' ;
   par.pm100d_timer = 1 ;
@@ -194,6 +205,8 @@ function  in2out = LaserInputOutputMeasure( varargin )
 
   val.pm100d_coefficient = @( x ) validnumbers( x, [ realmin , Inf ], 1 ) ;
   val.pm100d_magnitudes = @validnumbers ;
+  val.pm100d_initmagnitude = @( x ) validnumbers( x , [ ] , 1 ) && ...
+    any( x == par.pm100d_magnitudes ) ;
   val.pm100d_threshold = @( x ) validnumbers( x , [ 0 , 1 ] , 2 ) ;
   val.pm100d_signalaccumulator = @validstring ;
   val.pm100d_timer = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
@@ -215,8 +228,14 @@ function  in2out = LaserInputOutputMeasure( varargin )
     % Map Name/Value pair to meaningful variables
     [ Name , Value ] = varargin{ i : i + 1 } ;
 
+    % Name must be a classic string
+    if  ~ validstring( Name )
+
+      error( [ 'Name of Name/Value pairs must be char row vector ' , ...
+        'i.e. classic string' ] )
+
     % Parameter name is uknown
-    if  ~ isfield( par , Name )
+    elseif  ~ isfield( par , Name )
 
       error( 'Uknown parameter name %s' , Name )
     
@@ -475,9 +494,9 @@ function  mdat = finit_pm100d( C , par , syn , mdat )
 
     mdat.i = mdat.i + 1 ;
 
-  else % Otherwise, initialise to first amp. level
+  else % Otherwise, initialise to first amplification level
 
-    mdat.i = 1 ;
+    mdat.i = find( par.pm100d_initmagnitude == par.pm100d_magnitudes ) ;
 
   end % input arg index
 
