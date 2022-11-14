@@ -6,16 +6,22 @@ function  Y = transfer( C , X , invflg )
 % 
 % Predict laser output power in mW from input in V using coefficients C.
 % The transfer function starts off using a power function at low values of
-% V, but switches to a linear function above some threshold voltage. This
+% V, but switches to a linear function above some transition voltage. This
 % is appropriate for modelling the output of certain diode lasers e.g.
 % LuxX+ from Omicron Laserage.
 % 
-% C = [ B , M , P , v0 ], where B is the baseline, M is the scaling factor,
-%   and P is the power coefficient. v0 is the point at which the power
+% C = [ B , M , V0 , P , Vt ], where B is the baseline, M is the scaling
+%   factor, V0 is the amount horizontal shift along the voltage axis, and P
+%   is the power coefficient. Vt is the transition point at which the power
 %   function switches into a linear function.
 % 
-% mW = B + MV^P if V <= v0
-% mW = B + Mv0^P + (V-v0)MPv0^(P-1) if V > v0
+% Let f(v) = B + M(v-V0)^P and f'(v) = MP(v-V0)^(P-1), if v >= V0.
+% Let f(v) = B and f'(v) = 0, if v < V0.
+%
+% The output is computed as:
+%
+%   mW = f(v) if v <= Vt
+%   mW = f(Vt) + f'(Vt)(V-Vt) if v > Vt
 % 
 % Optional third input argument may be the flag '-inverse' in which case
 % the inverse function is computed such that the voltage to obtain a
@@ -36,6 +42,11 @@ function  Y = transfer( C , X , invflg )
   % Check that C and X are valid numeric arrays
   validnumber( C , 'C' )
   validnumber( X , 'X' )
+
+  % C must contain 5 terms
+  if  numel( C ) ~= 5
+    error( 'Expecting 5 terms in C.' )
+  end
   
   % Signal use of regular forward transfer function by default
   inv = false ;
@@ -59,12 +70,13 @@ function  Y = transfer( C , X , invflg )
   % Map coefficients to meaningful names
    B = C( 1 ) ;
    M = C( 2 ) ;
-   P = C( 3 ) ;
-  v0 = C( 4 ) ;
+  V0 = C( 3 ) ;
+   P = C( 4 ) ;
+  Vt = C( 5 ) ;
   
-  % Find power level and slope at v0
-  y0 =  func( B , M , P , v0 ) ;
-  s0 = deriv(     M , P , v0 ) ;
+  % Find power level and slope at Vt
+  y0 =  func( B , M , V0 , P , Vt ) ;
+  s0 = deriv(     M , V0 , P , Vt ) ;
 
   % Allocate output
   Y = zeros( size( X ) ) ;
@@ -73,14 +85,14 @@ function  Y = transfer( C , X , invflg )
   if  inv
     i = X <= y0 ; % ... inverse function.
   else
-    i = X <= v0 ; % ... forward function.
+    i = X <= Vt ; % ... forward function.
   end
 
   % Apply ...
   if  inv
-    Y( i ) = nthroot( ( X( i ) - B ) ./ M , P ) ; % inverse.
+    Y( i ) = nthroot( max( 0 , X( i ) - B ) ./ M , P ) + V0 ; % inverse.
   else
-    Y( i ) = func( B , M , P , X( i ) ) ; % ... forward function.
+    Y( i ) = func( B , M , V0 , P , X( i ) ) ; % ... forward function.
   end
   
   % Linear section
@@ -88,23 +100,23 @@ function  Y = transfer( C , X , invflg )
 
   % Apply ...
   if  inv
-    Y( i ) = ( X( i ) - y0 ) ./ s0 + v0 ; % ... inverse linear function.
+    Y( i ) = ( X( i ) - y0 ) ./ s0 + Vt ; % ... inverse linear function.
   else
-    Y( i ) = y0 + s0 .* ( X( i ) - v0 ) ; % ... forward linear function.
+    Y( i ) = y0 + s0 .* ( X( i ) - Vt ) ; % ... forward linear function.
   end
   
 end % transfer
 
 
 % Power function, forward
-function  mW = func( B , M , P , volts )
-  mW = B + M .* volts .^ P ;
+function  mW = func( B , M , V0 , P , volts )
+  mW = B + M .* max( 0 , volts - V0 ) .^ P ;
 end
 
 
 % First derivative of power function
-function  slope = deriv( M , P  , volts )
-  slope = M .* P .* volts .^ ( P - 1 ) ;
+function  slope = deriv( M , V0 , P , volts )
+  slope = M .* P .* max( 0 , volts - V0 ) .^ ( P - 1 ) ;
 end
 
 
