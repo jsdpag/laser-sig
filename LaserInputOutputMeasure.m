@@ -481,6 +481,14 @@ function  mdat = finit_pm100d( C , par , syn , mdat )
 
   end % input arg index
 
+  % Check that mdat.i does not run off of par.pm100d_magnitudes. This might
+  % happen if the laser power output is too high.
+  if  numel( par.pm100d_magnitudes ) < mdat.i
+    error( [ 'Power measurements exceed the range of all ' , ...
+      'amplification magnitudes. You may try restricting the range ' , ...
+        'of input voltages.' ] )
+  end
+
   % PM100D amplification value in mW
   mdat.amp = par.pm100d_coefficient * par.pm100d_magnitudes( mdat.i ) ;
 
