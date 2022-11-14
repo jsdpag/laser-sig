@@ -35,8 +35,8 @@ function  C = transcoef( V , mW )
   [ vmin , imin ] = min( V ) ;
 
   % Default starting coefficients + lower and upper bounds
-  C0 = [ mW( imin ) , 1 , 0 , 1 , 1 ] ;
-  LB = [          0 , 0 , 0 , 0 , 0 ] ;
+  C0 = [ mW( imin ) , 1 , 0.25 , 1 , 1 ] ;
+  LB = [          0 , 0 , 0.00 , 0 , 0 ] ;
   UB = inf( 1 , 5 ) ;
 
   % Non-zero starting baseline
