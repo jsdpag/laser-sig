@@ -321,6 +321,8 @@ function  makelasertable( varargin )
     xlabel( 'Input Volts' )
     ylabel( 'Emission power (mW)' )
     title( sprintf( 'Laser%d\\_%dnm' , i - 1 , wlen( i ) ) )
+    legend( { 'Data' , 'Model' } , 'FontSize' , 12 , ...
+      'Location' , 'northwest' )
 
   end % lasers
 
