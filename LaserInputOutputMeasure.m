@@ -349,8 +349,12 @@ function  in2out = LaserInputOutputMeasure( varargin )
     % Measure output
     [ mW , mdat ] = fmeasure( par , mdat , syn , V ) ;
 
-    % Invalid measurement, repeat
-    if  isempty( mW ) , continue , end
+    % Invalid measurement, reset previous input voltage then repeat
+    if  isempty( mW )
+      syn.setParameterValue( par.lasertester , 'VoltsSF' , ...
+                                       in2out.input_V( max( 1 , i - 1 ) ) )
+      pause( 0.5 ) , continue
+    end
 
     % Store measurement
     in2out.output_mW( i ) = mW ;
