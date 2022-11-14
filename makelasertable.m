@@ -204,7 +204,7 @@ function  makelasertable( varargin )
   mW = cat( 1 , mW.output_mW ) ;
 
   % Allocate coefficients for each laser. Rows index lasers. Cols ind coef.
-  C = zeros( N , 4 ) ;
+  C = zeros( N , 5 ) ;
 
   % Best-fitting coefficients for each laser
   for  i = 1 : N , C( i , : ) = transcoef( volts , mW( i , : ) ) ; end
@@ -217,12 +217,14 @@ function  makelasertable( varargin )
   txt.coef = cell( 1 , N + 1 ) ;
 
   % Define header
-  txt.coef{ 1 } = [ 'index,nm,B,M,P,v0' , newline ] ;
+  txt.coef{ 1 } = [ 'index,nm,B,M,V0,P,Vt' , newline ] ;
+
+  % Build formatting string for each line of data
+  fmt = [ '%d,%d' , repmat( ',%.9f' , 1 , size( C , 2 ) ) , '\n' ] ;
 
   % Lasers
   for  i = 1 : N
-    txt.coef{ i + 1 } = sprintf( '%d,%d,%.9f,%.9f,%.9f,%.9f\n' , ...
-      i - 1 , wlen( i ) , C( i , : ) ) ;
+    txt.coef{ i + 1 } = sprintf( fmt , i - 1 , wlen( i ) , C( i , : ) ) ;
   end
 
   % Concatenate into string with newlines
@@ -239,9 +241,11 @@ function  makelasertable( varargin )
   % Concatenate column headers with comma delimiter
   txt.meas{ 1 } = strjoin( txt.meas{ 1 } , ',' ) ;
 
+  % Build formatting string for each line of data
+  fmt = [ '%.9f' , repmat( ',%.9f', 1, N ) , '\n' ] ;
+
   % Next, format all measurements in string. One line per input voltage.
-  txt.meas{ 2 } = sprintf( [ '%.9f' , repmat( ',%.9f', 1, N ) , '\n' ] ,...
-    [ volts ; mW ] ) ;
+  txt.meas{ 2 } = sprintf( fmt , [ volts ; mW ] ) ;
 
   % Join header and data
   txt.meas = strjoin( txt.meas , '\n' ) ;
@@ -251,7 +255,7 @@ function  makelasertable( varargin )
   fnam.meas = fullfile( par.tabledir , par.powertable ) ;
 
   % Write to file
-  if  char2file( fnam.coef , txt.coef ) || char2file( fnam.meas , txt.meas )
+  if char2file( fnam.coef , txt.coef ) || char2file( fnam.meas , txt.meas )
 
     % Instruct user
     waitfor( warndlg( [ 'Failed to write table. ' , ...
