@@ -129,13 +129,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %       1000 ].
 %
 %     'pm100d_initmagnitude' - The starting magnitude, given as one of the
-%       values listed in pm100d_magnitudes. Be careful to make sure that
-%       any new value for pm100d_initmagnitude is given after any new value
-%       for pm100d_magnitudes i.e.
-%       LaserInputOutputMeasure(... 'pm100d_magnitudes'    , newmags ,
-%                               ... 'pm100d_initmagnitude' , newinit , ...)
-%       Otherwise the new starting magnitude will be checked for validity
-%       against the wrong set of amplificaiton magnitudes. Default 0.01.
+%       values listed in pm100d_magnitudes. Default 0.01.
 %     
 %     'pm100d_threshold' - A scalar value in the range (0,1] taken as a
 %       fraction of the current range limit of the PM100D measurement
@@ -205,8 +199,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
 
   val.pm100d_coefficient = @( x ) validnumbers( x, [ realmin , Inf ], 1 ) ;
   val.pm100d_magnitudes = @validnumbers ;
-  val.pm100d_initmagnitude = @( x ) validnumbers( x , [ ] , 1 ) && ...
-    any( x == par.pm100d_magnitudes ) ;
+  val.pm100d_initmagnitude = @( x ) validnumbers( x , [ ] , 1 ) ;
   val.pm100d_threshold = @( x ) validnumbers( x , [ 0 , 1 ] , 2 ) ;
   val.pm100d_signalaccumulator = @validstring ;
   val.pm100d_timer = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
@@ -250,6 +243,13 @@ function  in2out = LaserInputOutputMeasure( varargin )
     par.( Name ) = Value ;
 
   end % arg pairs
+
+  % Special checks
+
+    % Make sure that initial magnitude exists in the set of magnitudes
+    if  ~ any( par.pm100d_initmagnitude == par.pm100d_magnitudes )
+      error( 'pm100d_initmagnitude not found in pm100d_magnitudes.' )
+    end
 
 
   %%% Initialisation %%%
