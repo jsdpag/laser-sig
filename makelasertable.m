@@ -42,7 +42,8 @@ function  makelasertable( varargin )
 % 
 % tabledir, coefftable, and powertable name the parent directory,
 % coefficient table file name, and empirical measurement file name,
-% respectively.
+% respectively. Do not include file type suffixes e.g. '.csv'. These are
+% added automatically.
 % 
 % All other parameters are Name/Value input argument pairs that are defined
 % by LaserInputOutputMeasure (see help for that function). The exception
@@ -255,18 +256,37 @@ function  makelasertable( varargin )
   fnam.coef = fullfile( par.tabledir , par.coefftable ) ;
   fnam.meas = fullfile( par.tabledir , par.powertable ) ;
 
-  % Write to file
-  if char2file( fnam.coef , txt.coef ) || char2file( fnam.meas , txt.meas )
+  % Error flag
+  errflg = false ;
+
+  % Save binary copies of the data
+  try
+    save( fnam.coef , 'wlen' , 'C' )
+    save( fnam.meas , 'wlen' , 'volts' , 'mW' )
+  catch
+    errflg = true ;
+  end
+
+  % Add .csv file name extensions
+  fnam.coef = [ fnam.coef , '.csv' ] ;
+  fnam.meas = [ fnam.meas , '.csv' ] ;
+
+  % Write text copies of the data to CSV tables
+  errflg = errflg || ...
+    char2file( fnam.coef , txt.coef ) || char2file( fnam.meas , txt.meas );
+
+  % There was an error while writing to file
+  if  errflg
 
     % Instruct user
-    waitfor( warndlg( [ 'Failed to write table. ' , ...
+    waitfor( warndlg( [ 'Failed to save data. ' , ...
       'Save binary data to specified file.' ] ) )
 
     % Save data
     uisave( { 'wlen' , 'volts' , 'mW' , 'C' } , 'makelasertable.mat' )
 
     % Done
-    error( 'Failed to write tables.' )
+    error( 'Failed to save data.' )
 
   end % write to file
 

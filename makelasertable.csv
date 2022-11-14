@@ -1,6 +1,6 @@
 tabledir,.
-coefftable,lasers.csv
-powertable,laserpower_mW.csv
+coefftable,lasers
+powertable,laserpower_mW
 host,ESI-WSFRI037
 lasertester,LaserTester1
 input,200
