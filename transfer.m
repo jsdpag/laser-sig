@@ -15,7 +15,7 @@ function  Y = transfer( C , X , invflg )
 %   function switches into a linear function.
 % 
 % mW = B + MV^P if V <= v0
-% mW = B + Mv0^P + MP(V-v0)^(P-1) if V > v0
+% mW = B + Mv0^P + (V-v0)MPv0^(P-1) if V > v0
 % 
 % Optional third input argument may be the flag '-inverse' in which case
 % the inverse function is computed such that the voltage to obtain a
