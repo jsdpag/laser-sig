@@ -82,9 +82,10 @@ function  makelasertable( varargin )
   switch  par.measurement
 
     % Semi-automated measurement using ThorLabs PM100D. Get duration of
-    % timer.
+    % timer and starting amplification magnitude.
     case  'pm100d' , CARGIN = [ CARGIN , ...
-                    { 'pm100d_timer' , str2double( par.pm100d_timer ) } ] ;
+      { 'pm100d_initmagnitude' , str2double( par.pm100d_initmagnitude ) ...
+                'pm100d_timer' , str2double( par.pm100d_timer ) } ] ;
 
     % Method named in makelasertable.csv not currently supported
     otherwise , error( 'Method %s not supported by makelasertable.' )
