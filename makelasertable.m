@@ -309,10 +309,13 @@ function  makelasertable( varargin )
     scatter( volts , mW( i , : ) ) ;  hold on
 
     % Show best fitting transfer function
-    plot( x , transfer( C( i , : ) , x ) , 'LineWidth' , 1 )
+    plot( x , transfer( C( i , : ) , x ) , 'LineWidth' , 2 )
 
     % Formatting
-    set( gca , 'LineWidth' , 1 , 'TickDir' , 'out' , 'FontSize' , 12 )
+    ax = gca ;
+    set( ax , 'LineWidth' , 1 , 'TickDir' , 'out' , 'FontSize' , 12 )
+    ax.Children( 1 ).Color = ax.ColorOrder( 3 , : ) ;
+    axis square , grid on
 
     % Labels
     xlabel( 'Input Volts' )
