@@ -77,7 +77,11 @@ function  makelasertable( varargin )
 
   % List of constant name/value input args for LaserInputOutputMeasure
   CARGIN = { 'host' , par.host , 'lasertester' , par.lasertester , ...
-    'input' , str2double( par.input ) , 'measurement' , par.measurement } ;
+    'input' , str2double( par.input ) , 'range' , str2num( par.range ) ,...
+      'measurement' , par.measurement } ;
+
+  % Save for figures
+  par.range = CARGIN{ 8 } ;
 
   % Method specific constant input args
   switch  par.measurement
@@ -294,7 +298,7 @@ function  makelasertable( varargin )
   %%% Plot results %%%
 
   % Evaluation points, in volts
-  x = 0 : 0.001 : 5 ;
+  x = par.range( 1 ) : diff( par.range ) / 1e3 : par.range( 2 ) ;
 
   % Allocate vector of figures
   fig = gobjects( 1 , N ) ;
