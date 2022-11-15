@@ -3,12 +3,13 @@ coefftable,lasers
 powertable,laserpower_mW
 host,ESI-WSFRI037
 lasertester,LaserTester1
-input,100
-range,[0 2.5]
+input,200
+range,[0 5]
+zero,0.6
 measurement,pm100d
 pm100d_signalaccumulator,AvgPMvolts
 pm100d_timer,0.5
-pm100d_initmagnitude,10
+pm100d_initmagnitude,100
 pm100d_coef_473nm,5.6
 pm100d_coef_505nm,4.5
 pm100d_coef_594nm,3.1

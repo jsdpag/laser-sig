@@ -91,7 +91,7 @@ function  makelasertable( varargin )
   % List of constant name/value input args for LaserInputOutputMeasure
   CARGIN = { 'host' , par.host , 'lasertester' , par.lasertester , ...
     'input' , str2double( par.input ) , 'range' , str2num( par.range ) ,...
-      'measurement' , par.measurement } ;
+      'zero' , str2double( par.zero ) , 'measurement' , par.measurement } ;
 
   % Save for figures
   par.range = CARGIN{ 8 } ;

@@ -57,6 +57,12 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %   vector with format [ <minimum voltage> , <maximum voltage> ]. Default
 %   [ 0 , 5 ].
 % 
+% 'zero' - Number of seconds that laser input is set to zero for, between
+%   measurements. If Vi is the ith voltage input then the sequence of
+%   input voltages to the laser will be 0,V1,0,V2,0,V3,etc. Set this
+%   parameter to zero in order to run test input voltages with no zeroing
+%   between them. Default 0.5.
+% 
 % 'index' - The LaserTester Gizmo has a control parameter called
 %   'Wavelength'. In practice, this is an index with value 0 or 1 that
 %   specifies which of two sets of outputs receive non-zero input. Up to
@@ -173,6 +179,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
   par.lasertester = 'LaserTester1' ;
   par.input = 50 ;
   par.range = [ 0 , 5 ] ;
+  par.zero = 0.5 ;
   par.index = 0 ;
   par.ttlinvert = 0 ;
   par.measurement = 'manual' ;
@@ -193,6 +200,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
                      validnumbers( x , [ 0 , Inf ] , [ ] , false ) ;
   val.range = @( x ) validnumbers( x , [ 0 , 5.5 ] , 2 ) && ...
                      x( 2 ) > x( 1 ) ;
+  val.zero = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
   val.index = @( x ) validnumbers( x , [ 0 , 1 ] , 1 , true ) ;
   val.ttlinvert = @( x ) validnumbers( x , [ 0 , 1 ] , 1 , true ) ;
   val.measurement = @( s ) validstring( s , C.measurements ) ;
@@ -349,18 +357,17 @@ function  in2out = LaserInputOutputMeasure( varargin )
     % Measure output
     [ mW , mdat ] = fmeasure( par , mdat , syn , V ) ;
 
-    % Invalid measurement, reset previous input voltage then repeat
-    if  isempty( mW )
-      syn.setParameterValue( par.lasertester , 'VoltsSF' , ...
-                                       in2out.input_V( max( 1 , i - 1 ) ) )
-      pause( 0.5 ) , continue
+    % Valid measurement taken. Store it and go to next input voltage.
+    if  ~ isempty( mW )
+      in2out.output_mW( i ) = mW ;
+      i = i + 1 ;
     end
 
-    % Store measurement
-    in2out.output_mW( i ) = mW ;
-
-    % Increment to next measurement
-    i = i + 1 ;
+    % Zeroing input voltage is enabled for a timed duration
+    if  par.zero
+      syn.setParameterValue( par.lasertester , 'VoltsSF' , 0 ) ;
+      pause( par.zero )
+    end
 
   end % input measurements
   
