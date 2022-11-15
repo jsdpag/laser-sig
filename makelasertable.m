@@ -26,6 +26,14 @@ function  makelasertable( varargin )
 % (nm). Again, the example above shows that lasers 0 and 1 have wavelengths
 % of 505nm and 633nm.
 % 
+% It is possible to define a name separately for each laser by providing
+% input arguments of the form <wavelength>_<name>. In this case, the
+% underscore character '_' separates the numeric wavelength on the left
+% from the laser's name, on the right. The name must contain only
+% alphanumeric characters and underscores with no whitespace; the first
+% character must be alphabetical, so that the name can also function as a
+% MATLAB variable name or struct field name.
+% 
 % The user is prompted to set up the measurement for each laser, according
 % to its wavelength and the specified measurement method. Once the transfer
 % functions have all been empirically measured, they are fit using the
@@ -108,8 +116,10 @@ function  makelasertable( varargin )
     disp( 'Usage: makelasertable wlen0 [wlen1] [wlen2] ...' )
   end
   
-  % Allocate vector of laser wavelengths to measure
+  % Allocate vector of laser wavelengths, names, and positions
   wlen = zeros( 1 , N ) ;
+  wnam = repmat( { '' } , 1 , N ) ;
+  wpos = 0 : N - 1 ;
 
   % Input args
   for  i = 1 : N
@@ -118,9 +128,29 @@ function  makelasertable( varargin )
     if  ~( ischar( varargin{ i } ) && isrow( varargin{ i } ) )
       error( 'Input arg %d is not classic string (char row vector)' , i )
     end
+    
+    % Parse wavelength and name from input arg
+    sarg = regexp( varargin{ i } , '^(?<wlen>\d+)(?<wnam>_\w*)?$' , ...
+      'names' ) ;
+
+      % Drop underscore from <wavelength>_<name> formatting
+      sarg.wnam( 1 ) = [ ] ;
+
+    % No valid format to input arg
+    if  isempty( sarg )
+      error( 'Invalid format of arg %d: %s' , i , varargin{ i } )
+    end
 
     % Convert to double floating point
-    wlen( i ) = str2double( varargin{ i } ) ;
+    wlen( i ) = str2double( sarg.wlen ) ;
+
+    % Get name
+    wnam{ i } = sarg.wnam ;
+
+    % Empty name, provide a default
+    if  isempty( wnam{ i } )
+      wnam{ i } = sprintf( '%d_%d' , wlen( i ) , wpos( i ) ) ;
+    end
 
   end % input args
   
@@ -139,7 +169,21 @@ function  makelasertable( varargin )
     error( 'All input number must be positive integers.' )
   end
 
-  % Method-specific arg check
+  % Make sure that all names are unique ...
+  if  ~ isequal( wnam , unique( wnam , 'stable' ) )
+
+    error( 'Laser names must be unique to each laser.' )
+
+  % ... and that they are all valid MATLAB variable/field names
+  elseif  ~ all( cellfun( @isvarname , wnam ) )
+
+    error( 'Laser names must be valid MATLAB variable/field names.' )
+
+  end % check laser names
+
+
+  %%% Method-specific param check %%%
+
   switch  par.measurement
 
     % Make sure that all wavelengths have an entry in the PM100D
@@ -223,14 +267,15 @@ function  makelasertable( varargin )
   txt.coef = cell( 1 , N + 1 ) ;
 
   % Define header
-  txt.coef{ 1 } = [ 'index,nm,B,M,V0,P,Vt' , newline ] ;
+  txt.coef{ 1 } = [ 'index,nm,name,B,M,V0,P,Vt' , newline ] ;
 
   % Build formatting string for each line of data
-  fmt = [ '%d,%d' , repmat( ',%.9f' , 1 , size( C , 2 ) ) , '\n' ] ;
+  fmt = [ '%d,%d,%s' , repmat( ',%.9f' , 1 , size( C , 2 ) ) , '\n' ] ;
 
   % Lasers
   for  i = 1 : N
-    txt.coef{ i + 1 } = sprintf( fmt , i - 1 , wlen( i ) , C( i , : ) ) ;
+    txt.coef{ i + 1 } = ...
+      sprintf( fmt , wpos( i ) , wlen( i ) , wnam{ i } , C( i , : ) ) ;
   end
 
   % Concatenate into string with newlines
@@ -240,9 +285,9 @@ function  makelasertable( varargin )
   txt.meas = cell( 1 , 2 ) ;
 
   % Column headers, identifying each laser for each power column
-  txt.meas{ 1 } = [ { 'Volts' } , ...
-    arrayfun( @( i , nm ) sprintf( 'Laser%d_%dnm' , i , nm ) , ...
-      0 : N - 1 , wlen , 'UniformOutput' , false ) ] ;
+  txt.meas{ 1 } = [ { 'Volts' } , arrayfun( ...
+    @( i , nm , nam ) sprintf( 'Laser%d_%dnm_%s' , i , nm , nam{ 1 } ) ,...
+      wpos , wlen , wnam , 'UniformOutput' , false ) ] ;
 
   % Concatenate column headers with comma delimiter
   txt.meas{ 1 } = strjoin( txt.meas{ 1 } , ',' ) ;
@@ -265,8 +310,8 @@ function  makelasertable( varargin )
 
   % Save binary copies of the data
   try
-    save( fnam.coef , 'wlen' , 'C' )
-    save( fnam.meas , 'wlen' , 'volts' , 'mW' )
+    save( fnam.coef , 'wlen' , 'wnam' , 'wpos' , 'C' )
+    save( fnam.meas , 'wlen' , 'wnam' , 'wpos' , 'volts' , 'mW' )
   catch
     errflg = true ;
   end
@@ -324,7 +369,7 @@ function  makelasertable( varargin )
     % Labels
     xlabel( 'Input Volts' )
     ylabel( 'Emission power (mW)' )
-    title( sprintf( 'Laser%d\\_%dnm' , i - 1 , wlen( i ) ) )
+    title( sprintf( 'Laser%d\\_%dnm' , wpos( i ) , wlen( i ) ) )
     legend( { 'Data' , 'Model' } , 'FontSize' , 12 , ...
       'Location' , 'northwest' )
 
