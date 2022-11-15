@@ -79,6 +79,9 @@ function  makelasertable( varargin )
   % Separate by newline and comma delimiter characters
   par = strsplit( par , { '\n' , ',' } ) ;
 
+  % Remove any whitespace residue that might appear e.g. Windows reasons
+  par = strip( par ) ;
+
   % Reconfigure into 2 x num-pars cell array of classic strings
   par = reshape( par , 2 , [ ] ) ;
 
