@@ -33,6 +33,8 @@ function  makelasertable( varargin )
 % alphanumeric characters and underscores with no whitespace; the first
 % character must be alphabetical, so that the name can also function as a
 % MATLAB variable name or struct field name.
+%
+%   e.g. >> makelasertable 505_green 633_orange
 % 
 % The user is prompted to set up the measurement for each laser, according
 % to its wavelength and the specified measurement method. Once the transfer
