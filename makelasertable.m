@@ -233,9 +233,13 @@ function  makelasertable( varargin )
 
     end % method specific args
 
+    % Format user prompt
+    prompt = sprintf( ...
+      [ 'Please prepare to measure laser %d - %dnm - %s power output.' ,...
+        '\nClick OK when done.' ] , wpos( i ) , wlen( i ) , wnam{ i } ) ;
+
     % Prompt user to set the measurement device for this laser's wavelength
-    waitfor( warndlg( [ 'Please prepare to measure ' , varargin{ i } , ...
-      'nm laser power output.' , newline , 'Click OK when done.' ] ) )
+    waitfor( warndlg( prompt ) )
 
     % Measure this laser's transfer function
     in2out{ i } = LaserInputOutputMeasure( CARGIN{ : } , vargin{ : } ) ;
