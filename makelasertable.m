@@ -242,7 +242,8 @@ function  makelasertable( varargin )
     waitfor( warndlg( prompt ) )
 
     % Measure this laser's transfer function
-    in2out{ i } = LaserInputOutputMeasure( CARGIN{ : } , vargin{ : } ) ;
+    in2out{ i } = LaserInputOutputMeasure( 'index' , wpos( i ) , ...
+      CARGIN{ : } , vargin{ : } ) ;
 
   end % lasers
 
