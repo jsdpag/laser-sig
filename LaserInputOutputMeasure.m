@@ -61,7 +61,10 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %   measurements. If Vi is the ith voltage input then the sequence of
 %   input voltages to the laser will be 0,V1,0,V2,0,V3,etc. Set this
 %   parameter to zero in order to run test input voltages with no zeroing
-%   between them. Default 0.5.
+%   between them. The TTL digital enable signal is lowered at the same time
+%   as the voltage is zeroed. The rationale for using this parameter is to
+%   help simulate an experiment in which the laser will be briefly
+%   activated once per trial. Default 0.5.
 % 
 % 'index' - The LaserTester Gizmo has a control parameter called
 %   'Wavelength'. In practice, this is an index with value 0 or 1 that
@@ -151,6 +154,21 @@ function  in2out = LaserInputOutputMeasure( varargin )
 %       Gizmo's Strobe parameter is raised from 0 to 1. A timer runs for
 %       the set duration. The measurement is taken. And the Strobe
 %       parameter is lowered again. Default 1.0.
+%     
+%     'pm100d_settle' - Scalar value giving the number of seconds that pass
+%       between setting the voltage input and initiating the accumulation
+%       of a measurement. This allows for the Power Meter to settle into
+%       its new value before a reading is taken, making the power meter's
+%       output as stationary as possible, notwithstanding a slow drift in
+%       the laser emission power. Default 0.1.
+%     
+%     'pm100d_zero' - Scalar number. If this parameter is non-zero, and the
+%       master zero parameter is also non-zero (see zero parameter, above)
+%       then zero the voltage & digital input to the laser when it is time
+%       for the user to manually change amplification levels. However, if
+%       pm100d_zero is, itself, zero then leave the voltage where it was at
+%       the time that a necessary change in PM100D amplitude was detected.
+%       Default 1.
 %
 % 
 % Written by Jackson Smith - October 2022 - Fries Lab (ESI Frankfurt)
@@ -174,6 +192,8 @@ function  in2out = LaserInputOutputMeasure( varargin )
 
   %%% Parameters %%%
 
+  % Restricted field names: fttl
+
   % Set default general parameters
   par.host = 'localhost' ;
   par.lasertester = 'LaserTester1' ;
@@ -191,6 +211,8 @@ function  in2out = LaserInputOutputMeasure( varargin )
   par.pm100d_threshold = 0.95 ;
   par.pm100d_signalaccumulator = 'AvgPMvolts' ;
   par.pm100d_timer = 1 ;
+  par.pm100d_settle = 0.1 ;
+  par.pm100d_zero = 1 ;
 
   % Define functions that test validity of input parameter values. Return
   % true if input is valid.
@@ -211,6 +233,8 @@ function  in2out = LaserInputOutputMeasure( varargin )
   val.pm100d_threshold = @( x ) validnumbers( x , [ 0 , 1 ] , 2 ) ;
   val.pm100d_signalaccumulator = @validstring ;
   val.pm100d_timer = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
+  val.pm100d_settle = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
+  val.pm100d_zero = @( x ) validnumbers( x , [ 0 , Inf ] , 1 ) ;
 
 
   %%% Input args %%%
@@ -298,8 +322,9 @@ function  in2out = LaserInputOutputMeasure( varargin )
   N = numel( par.input ) ;
 
   % Define a TTL logic scheme that converts 0 (false) and 1 (true) input to
-  % the correct value
-  fttl = @( x ) abs( par.ttlinvert - x ) ;
+  % the correct value. Store this in struct par so that it's available
+  % inside function calls.
+  par.fttl = @( x ) abs( par.ttlinvert - x ) ;
 
   % Connect to Synapse
   syn = SynapseAPI( par.host ) ;
@@ -341,18 +366,18 @@ function  in2out = LaserInputOutputMeasure( varargin )
   % Print headers on each column
   fprintf( 'Input(V),Output(mW)\n' ) ;
 
-  % Set LaserTester so that selected laser is enabled
+  % Set LaserTester index
   syn.setParameterValue( par.lasertester , 'Wavelength' , par.index ) ;
-  syn.setParameterValue( par.lasertester ,     'Enable' , fttl( 1 ) ) ;
 
   % Input measurements , fetch current input voltage
   while  i <= N , V = in2out.input_V( i ) ;
 
-    % Set laser's input voltage
-    syn.setParameterValue( par.lasertester , 'VoltsSF' , V ) ;
-
     % Show value being measured
     fprintf( '%.3fV,' , V )
+
+    % Set laser's input voltage and raise TTL digital enabling signal
+    syn.setParameterValue( par.lasertester , 'VoltsSF' , V             ) ;
+    syn.setParameterValue( par.lasertester ,  'Enable' , par.fttl( 1 ) ) ;
 
     % Measure output
     [ mW , mdat ] = fmeasure( par , mdat , syn , V ) ;
@@ -363,10 +388,10 @@ function  in2out = LaserInputOutputMeasure( varargin )
       i = i + 1 ;
     end
 
-    % Zeroing input voltage is enabled for a timed duration
+    % Zeroing laser input between measurements is enabled
     if  par.zero
-      syn.setParameterValue( par.lasertester , 'VoltsSF' , 0 ) ;
-      pause( par.zero )
+      lazeroff( par , syn ) ;
+      pause( par.zero ) ;
     end
 
   end % input measurements
@@ -375,8 +400,7 @@ function  in2out = LaserInputOutputMeasure( varargin )
   %%% Done %%%
 
   % Disable laser
-  syn.setParameterValue( par.lasertester , 'VoltsSF' , 0         ) ;
-  syn.setParameterValue( par.lasertester ,  'Enable' , fttl( 0 ) ) ;
+  lazeroff( par , syn ) ;
 
   % Re-set initial  Synapsemode string, if different
   if  ~ strcmp( init.modestring , syn.getModeStr )
@@ -456,8 +480,18 @@ function  setsynapsemode( C , syn , modestr )
 end % setsynapsemode
 
 
+% Set voltage and TTL digital laser inputs to zero
+function  lazeroff( par , syn )
+  syn.setParameterValue( par.lasertester , 'VoltsSF' , 0             ) ;
+  syn.setParameterValue( par.lasertester ,  'Enable' , par.fttl( 0 ) ) ;
+end
+
+
 % Take a measurement from PM100D via the Signal Accumulator Gizmo
 function  avg = pm100d_volts( par , syn )
+  
+  % Wait for PM100D output to settle down before accumulating a measurement
+  pause( par.pm100d_settle ) ;
   
   % Raise Signal Accumulator strobe to start averaging power meter Aout
   syn.setParameterValue( par.pm100d_signalaccumulator , 'Strobe' , 1 ) ;
@@ -518,6 +552,9 @@ function  mdat = finit_pm100d( C , par , syn , mdat )
       'amplification magnitudes. You may try restricting the range ' , ...
         'of input voltages.' ] )
   end
+
+  % Zero laser input, if master and pm100d zeroing are both enabled.
+  if  par.zero  &&  par.pm100d_zero , lazeroff( par , syn ) ; end
 
   % PM100D amplification value in mW
   mdat.amp = par.pm100d_coefficient * par.pm100d_magnitudes( mdat.i ) ;
