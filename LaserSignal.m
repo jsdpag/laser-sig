@@ -135,10 +135,6 @@ classdef  LaserSignal < handle
     % about that parameter, as returned by SynapseAPI.
     ipar  struct
     
-    % Timer valus, in milliseconds, after rounding up to the next complete
-    % sinusoidal cycle and TDT sample.
-    TimerUp  double
-    
     % Timer value, in number of parent device samples. Equals the same time
     % duration as in TimerUp.
     TimerSamp  uint32
@@ -150,6 +146,15 @@ classdef  LaserSignal < handle
     % complete sample at fs Hz.
     LatchRfTime  uint32
     
+  end
+
+
+  properties  ( SetAccess = private )
+
+    % Timer valus, in milliseconds, after rounding up to the next complete
+    % sinusoidal cycle and TDT sample.
+    TimerUp  double
+
   end
   
   
@@ -265,7 +270,7 @@ classdef  LaserSignal < handle
     end
     
     
-    function  x = chklim( obj , par , x )
+    function  x = setgizmoparam( obj , par , x )
     %
     % x = chklim( obj , par , x ). Check whether value x is within the
     % valid range that is required by the obj parameter named par. x is
@@ -315,7 +320,7 @@ classdef  LaserSignal < handle
       obj.Timer = x ;
       
       % Round up to next complete sinusoidal cycle and TDT sample
-      obj.TimerUp = obj.Timer ;
+      if  obj.TimerUp ~= obj.Timer , obj.TimerUp = obj.Timer ; end
       
     end
     
@@ -346,6 +351,9 @@ classdef  LaserSignal < handle
       
       % And assign new timer value in number of TDT samples
       obj.TimerSamp = samp ;
+
+      % Re-calculate latch time
+      obj.implementplateau
       
     end
     
@@ -353,10 +361,7 @@ classdef  LaserSignal < handle
     function  set.TimerSamp( obj , x )
       
       % Assign value. Input arg string refers to the Gizmo control.
-      obj.TimerSamp = obj.chklim( 'Timer' , x ) ;
-      
-      % Re-calculate latch time
-      obj.implementplateau
+      obj.TimerSamp = obj.setgizmoparam( 'Timer' , x ) ;
       
     end
     
@@ -367,7 +372,7 @@ classdef  LaserSignal < handle
       if  obj.init , obj.Frequency = newfreq ; return , end
       
       % Check and assign new frequency value
-      obj.Frequency = obj.chklim( 'Frequency' , newfreq ) ;
+      obj.Frequency = obj.setgizmoparam( 'Frequency' , newfreq ) ;
       
       % Re-calculate timer extension to target value
       obj.TimerUp = obj.Timer ;
@@ -376,22 +381,22 @@ classdef  LaserSignal < handle
     
     
     function  set.LatchRfTime( obj , x )
-      obj.LatchRfTime = obj.chklim( 'LatchRfTime' , x ) ;
+      obj.LatchRfTime = obj.setgizmoparam( 'LatchRfTime' , x ) ;
     end
     
     
     function  set.LaserID( obj , x )
-      obj.LaserID = obj.chklim( 'LaserID' , x ) ;
+      obj.LaserID = obj.setgizmoparam( 'LaserID' , x ) ;
     end
     
     
     function  set.LaserSF( obj , x )
-      obj.LaserSF = obj.chklim( 'LaserSF' , x ) ;
+      obj.LaserSF = obj.setgizmoparam( 'LaserSF' , x ) ;
     end
     
     
     function  set.LaserShift( obj , x )
-      obj.LaserShift = obj.chklim( 'LaserShift' , x ) ;
+      obj.LaserShift = obj.setgizmoparam( 'LaserShift' , x ) ;
     end
     
     
