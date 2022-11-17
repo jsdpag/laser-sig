@@ -84,7 +84,7 @@ classdef  LaserSignal < handle
     
     % When converting from the pre-amp sinusoid to Volts, first multiply by
     % LaserSF and then add baseline shift LaserShift.
-    Laser0Shift  single
+    LaserShift  single
     
     % True or false logical value. When false, the analogue output for the
     % selected laser from the LaserSignal Gizmo will contain the scaled and
@@ -390,8 +390,8 @@ classdef  LaserSignal < handle
     end
     
     
-    function  set.Laser0Shift( obj , x )
-      obj.Laser0Shift = obj.chklim( 'LaserShift' , x ) ;
+    function  set.LaserShift( obj , x )
+      obj.LaserShift = obj.chklim( 'LaserShift' , x ) ;
     end
     
     
