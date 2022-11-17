@@ -12,12 +12,13 @@ classdef  LaserSignal < handle
 % timing signals that trigger the onset and offset of signals from the
 % LaserSignal Gizmo.
 % 
-% NOTE: two lasers can be controlled, each with their own Voltage scaling
-% factor and baseline shift. Hence, values can be chosen that drive the two
-% lasers in the same range of output power values (e.g. in mW). Then, the
-% pre-amp parameter SetAmp can be used as a single, intuitive way of
-% setting the desired amplitude of the laser output, in milliWatts, for
-% either laser.
+% The laser emission power is set using the LaserSF and LaserShift
+% parameters. These provide scaling factor and baseline shift values, in
+% Volts. The pre-amplified sinusoidal signal that is produced by the
+% LaserSignal Gizmo is scaled between 0 and 1, peak to peak. This is
+% multiplies by the scaling factor and then added to the shift to obtain
+% the final analogue voltage signal that is delivered to the laser's input
+% port.
 % 
 % Written by Jackson Smith - August 2022 - Fries Lab (ESI Frankfurt)
 % 
@@ -27,9 +28,8 @@ classdef  LaserSignal < handle
     
     % Mandatory list of parameters (i.e. Gizmo controls) that the
     % LaserSignal Gizmo must have.
-    REQPAR = { 'Timer' , 'SetAmp' , 'Laser0SF' , 'Laser0Shift' , ...
-      'Laser1Shift' , 'Laser1SF' , 'LaserID' , 'Frequency' , ...
-        'LatchRfTime' , 'MaxAmp' } ;
+    REQPAR = { 'Timer' , 'LatchRfTime' , 'Frequency' , 'LaserID' , ...
+      'LaserSF' , 'LaserShift' } ;
     
     % Mapping of Gizmo control names (field) to class property names
     % (value), where these differ
@@ -71,23 +71,6 @@ classdef  LaserSignal < handle
     % procedure as when the Timer property is set.
     Frequency  single
     
-    % The target amplitude of the laser output, in milliWatts. The raw
-    % sinusoidal signal spans [0,1] from peak to trough. This is multiplied
-    % by the SetAmp value, then divided by MaxAmp, producing a sinusoid in
-    % the range [0,1]. It is interpreted as the fraction of the total
-    % output value. The laser-specific scaling and shifting factors are
-    % then applied to transform the fraction into a corresponding Voltage
-    % value, such that the peak voltage drives the laser at SetAmp. Note!
-    % If SetAmp > MaxAmp then the LaserSignal Gizmo will not produce
-    % output.
-    SetAmp  single
-    
-    % The maximum power output of the lasers when driven at their maximum
-    % input voltage. This should be the maximum measured output as it is
-    % when delivered to the target tissue rather than the maximum output of
-    % the laser at source.
-    MaxAmp  single
-    
     % Laser identifier. Specifies with pair of analogue/TTL outputs of the
     % linked LaserSignal Gizmo will generate non-zero output when laser
     % emission is triggered by a DAQON event marker. Values can be 0 or 1,
@@ -95,21 +78,13 @@ classdef  LaserSignal < handle
     % and 1 refers to the laser that receives the other pair.
     LaserID  uint8
     
-    % The laser with ID 0, linked to the corresponding analogue/TTL
-    % outputs, will use this scaling factor when converting the pre-amp
-    % sinusoid to Voltages.
-    Laser0SF  single
+    % Will use this scaling factor when converting the pre-amp sinusoid to
+    % Voltages.
+    LaserSF  single
     
-    % For laser 0. When converting from the pre-amp sinusoid to Volts,
-    % first multiply by Laser0SF and then add baseline shift Laser0Shift.
+    % When converting from the pre-amp sinusoid to Volts, first multiply by
+    % LaserSF and then add baseline shift LaserShift.
     Laser0Shift  single
-    
-    % Same as Laser0SF, but for the laser with ID 1 that is fed by the
-    % other pair of analogue/TTL LaserSignal Gizmo outputs.
-    Laser1SF  single
-    
-    % Same as Laser0Shift, but for laser 1.
-    Laser1Shift  single
     
     % True or false logical value. When false, the analogue output for the
     % selected laser from the LaserSignal Gizmo will contain the scaled and
@@ -328,38 +303,6 @@ classdef  LaserSignal < handle
     end
     
     
-    function  set.SetAmp( obj , x )
-      
-      % Check for scalar value
-      if  ~ isscalar( x )
-        
-        error( 'New SetAmp value must be scalar.' )
-        
-      % New value must NOT exceed MaxAmp
-      elseif  x > obj.MaxAmp
-        
-        error( 'New SetAmp value is greater than MaxAmp.' )
-        
-      end % input error check
-      
-      % Further error checking, and set Gizmo control value
-      obj.SetAmp = obj.chklim( 'SetAmp' , x ) ;
-      
-    end
-    
-    
-    function  set.MaxAmp( obj , x )
-      
-      % Set Gizmo control
-      obj.MaxAmp = obj.chklim( 'MaxAmp' , x ) ;
-      
-      % New MaxAmp value is less than current SetAmp value, so assign
-      % SetAmp to its maximum valid value
-      if  obj.MaxAmp < obj.SetAmp , obj.SetAmp = obj.MaxAmp ; end
-      
-    end
-    
-    
     function  set.Timer( obj , x )
     %
     % Assign new target duration for the timer, in milliseconds
@@ -442,23 +385,13 @@ classdef  LaserSignal < handle
     end
     
     
-    function  set.Laser0SF( obj , x )
-      obj.Laser0SF = obj.chklim( 'Laser0SF' , x ) ;
+    function  set.LaserSF( obj , x )
+      obj.LaserSF = obj.chklim( 'LaserSF' , x ) ;
     end
     
     
     function  set.Laser0Shift( obj , x )
-      obj.Laser0Shift = obj.chklim( 'Laser0Shift' , x ) ;
-    end
-    
-    
-    function  set.Laser1SF( obj , x )
-      obj.Laser1SF = obj.chklim( 'Laser1SF' , x ) ;
-    end
-    
-    
-    function  set.Laser1Shift( obj , x )
-      obj.Laser1Shift = obj.chklim( 'Laser1Shift' , x ) ;
+      obj.Laser0Shift = obj.chklim( 'LaserShift' , x ) ;
     end
     
     
