@@ -63,6 +63,17 @@ function  makelasertable( varargin )
 % correct value of the LaserInputOutputMeasure's pm100d_coefficient
 % parameter.
 % 
+% Another exception is 'chans'. By default, this should be 1. It is used
+% when the laser light is split as evenly as possible between multiple
+% output channels. In this case, chans should be the number of output
+% channels. A separate measurement is taken for each channel, per laser.
+% When fitting the transfer function, data from all the output channels are
+% used. Thus, the transfer function becomes a mapping between voltage in to
+% the laser and the expected emisison power from from a single output
+% channel. The empirical input/output measurements are stored separately
+% per output channel. Output channels are numbered in the same manner as
+% laser positions; starting with 0 and incrementing by +1 per channel.
+% 
 % Written by Jackson Smith - November 2022 - Fries Lab (ESI Frankfurt)
 % 
   
@@ -96,6 +107,16 @@ function  makelasertable( varargin )
   % Save for figures
   par.range = CARGIN{ 8 } ;
 
+  % Cast number of output channels from string to double
+  par.chans = str2double( par.chans ) ;
+
+    % Basic checks
+    if  ~ ( isscalar( par.chans ) && isfinite( par.chans ) && ...
+            mod( par.chans , 1 ) == 0 && par.chans > 0 )
+      error( [ 'Number of output channels (chans in ' , ...
+      'makelasertable.csv) must be scalar, finite integer of 1 or more' ] )
+    end
+
   % Method specific constant input args
   switch  par.measurement
 
@@ -121,10 +142,12 @@ function  makelasertable( varargin )
     disp( 'Usage: makelasertable wlen0 [wlen1] [wlen2] ...' )
   end
   
-  % Allocate vector of laser wavelengths, names, and positions
-  wlen = zeros( 1 , N ) ;
-  wnam = repmat( { '' } , 1 , N ) ;
-  wpos = 0 : N - 1 ;
+  % Allocate laser wavelengths, names, positions, and output channels. One
+  % column per laser. One row per output channel.
+  wlen = zeros( par.chans , N ) ;
+  name = repmat( { '' } , par.chans , N ) ;
+  ipos = repmat( 0 : N - 1 , par.chans , 1 ) ;
+  chan = repmat( ( 0 : par.chans - 1 )' , 1 , N ) ;
 
   % Input args
   for  i = 1 : N
@@ -147,14 +170,14 @@ function  makelasertable( varargin )
     end
 
     % Convert to double floating point
-    wlen( i ) = str2double( sarg.wlen ) ;
+    wlen( : , i ) = str2double( sarg.wlen ) ;
 
     % Get name
-    wnam{ i } = sarg.wnam ;
+    name( : , i ) = { sarg.wnam } ;
 
-    % Empty name, provide a default
-    if  isempty( wnam{ i } )
-      wnam{ i } = sprintf( '%d_%d' , wlen( i ) , wpos( i ) ) ;
+    % Empty name, initialise default with wavelength and laser position
+    if  isempty( name{ 1 , i } )
+      name( : , i ) = { sprintf( '%d_%d' , wlen( i ) , ipos( i ) ) } ;
     end
 
   end % input args
@@ -175,12 +198,12 @@ function  makelasertable( varargin )
   end
 
   % Make sure that all names are unique ...
-  if  ~ isequal( wnam , unique( wnam , 'stable' ) )
+  if  ~ isequal( name( 1 , : ) , unique( name( 1 , : ) , 'stable' ) )
 
     error( 'Laser names must be unique to each laser.' )
 
   % ... and that they are all valid MATLAB variable/field names
-  elseif  ~ all( cellfun( @isvarname , wnam ) )
+  elseif  ~ all( cellfun( @isvarname , name( 1 , : ) ) )
 
     error( 'Laser names must be valid MATLAB variable/field names.' )
 
@@ -196,8 +219,8 @@ function  makelasertable( varargin )
     case  'pm100d'
 
       % Make all possible lookup table parameter names
-      pnam = arrayfun( @( w ) sprintf( 'pm100d_coef_%dnm' , w ) , wlen ,...
-        'UniformOutput' , false ) ;
+      pnam = arrayfun( @( w ) sprintf( 'pm100d_coef_%dnm' , w ) , ...
+        wlen( 1 , : ) , 'UniformOutput' , false ) ;
 
       % Missing wavelength coefficient
       i = ~ isfield( par , pnam ) ;
@@ -213,11 +236,13 @@ function  makelasertable( varargin )
 
   %%% Measure transfer functions %%%
 
-  % Allocate cell array, one cell per wavelength
-  in2out = cell( N , 1 ) ;
+  % Allocate cell array, one cell per laser/output channel. One column
+  % per laser, one row per output channel.
+  in2out = cell( par.chans , N ) ;
 
-  % Lasers
-  for  i = 1 : N
+  % Lasers, i is the linear index of wlen, name, ipos, chan, & in2out.
+  % Progressing in column major order i.e. traverse channels per laser.
+  for  i = 1 : par.chans * N
 
     % Gather together variable name/value args for LaserInputOutputMeasure
 
@@ -235,14 +260,15 @@ function  makelasertable( varargin )
 
     % Format user prompt
     prompt = sprintf( ...
-      [ 'Please prepare to measure laser %d - %dnm - %s power output.' ,...
-        '\nClick OK when done.' ] , wpos( i ) , wlen( i ) , wnam{ i } ) ;
+      [ 'Please prepare to measure laser %d, %dnm, chan %d, %s power.' ,...
+        '\nClick OK when done.' ] , ...
+          ipos( i ) , wlen( i ) , chan( i ) , name{ i } ) ;
 
     % Prompt user to set the measurement device for this laser's wavelength
     waitfor( warndlg( prompt ) )
 
     % Measure this laser's transfer function
-    in2out{ i } = LaserInputOutputMeasure( 'index' , wpos( i ) , ...
+    in2out{ i } = LaserInputOutputMeasure( 'index' , ipos( i ) , ...
       CARGIN{ : } , vargin{ : } ) ;
 
   end % lasers
@@ -254,23 +280,29 @@ function  makelasertable( varargin )
   volts = in2out{ 1 }.input_V ;
 
   % Check that the same voltages were tested across lasers
-  if  ~ all( cellfun( @( c ) isequal( volts , c.input_V ) , in2out ) )
+  if  ~ all( cellfun( @( c ) isequal( volts , c.input_V ) , in2out( : ) ) )
     error( 'Voltage input mismatch across measured lasers.' )
   end
 
-  % Concatenate measured output power. Columns in register with voltages.
-  % Row index in register with wlen and argument input order.
-  mW = [ in2out{ : } ] ;
-  mW = cat( 1 , mW.output_mW ) ;
+  % For fitting procedure, repeat tested voltages per channel
+  V = repmat( volts , 1 , par.chans ) ;
+
+  % Eliminate one level of nesting by fetching power output measurements.
+  % Continue to store these in the chans x lasers cell array
+  mW = cellfun( @( c ) c.output_mW , in2out , 'UniformOutput' , false ) ;
 
   % Allocate coefficients for each laser. Rows index lasers. Cols ind coef.
   C = zeros( N , 5 ) ;
 
   % Best-fitting coefficients for each laser
-  for  i = 1 : N , C( i , : ) = transcoef( volts , mW( i , : ) ) ; end
+  for  i = 1 : N , C( i , : ) = transcoef( V , [ mW{ : , i } ] ) ; end
 
 
   %%% Write output tables %%%
+
+  % Re-arrange power measurements into an array with one column per input
+  % voltage, and one row per channel/laser combination
+  mW = reshape( [ mW{ : } ] , numel( volts ) , par.chans * N )' ;
 
   % Allocate cell array for coefficients table, one row per laser and one
   % more for the header
@@ -285,7 +317,7 @@ function  makelasertable( varargin )
   % Lasers
   for  i = 1 : N
     txt.coef{ i + 1 } = ...
-      sprintf( fmt , wpos( i ) , wlen( i ) , wnam{ i } , C( i , : ) ) ;
+      sprintf( fmt , ipos( i ) , wlen( i ) , name{ i } , C( i , : ) ) ;
   end
 
   % Concatenate into string with newlines
@@ -295,15 +327,16 @@ function  makelasertable( varargin )
   txt.meas = cell( 1 , 2 ) ;
 
   % Column headers, identifying each laser for each power column
-  txt.meas{ 1 } = [ { 'Volts' } , arrayfun( ...
-    @( i , nm , nam ) sprintf( 'Laser%d_%dnm_%s' , i , nm , nam{ 1 } ) ,...
-      wpos , wlen , wnam , 'UniformOutput' , false ) ] ;
+  txt.meas{ 1 } = [ { 'Volts' } , ...
+    arrayfun( @( i , nm , ch , nam ) sprintf( 'Laser%d_%dnm_ch%d_%s', ...
+      i, nm, ch, nam{ 1 } ) , ipos(:) , wlen(:) , chan(:) , name(:) , ...
+        'UniformOutput' , false )' ] ;
 
   % Concatenate column headers with comma delimiter
   txt.meas{ 1 } = strjoin( txt.meas{ 1 } , ',' ) ;
 
   % Build formatting string for each line of data
-  fmt = [ '%.9f' , repmat( ',%.9f', 1, N ) , '\n' ] ;
+  fmt = [ '%.9f' , repmat( ',%.9f', 1, par.chans * N ) , '\n' ] ;
 
   % Next, format all measurements in string. One line per input voltage.
   txt.meas{ 2 } = sprintf( fmt , [ volts ; mW ] ) ;
@@ -320,8 +353,8 @@ function  makelasertable( varargin )
 
   % Save binary copies of the data
   try
-    save( fnam.coef , 'wlen' , 'wnam' , 'wpos' , 'C' )
-    save( fnam.meas , 'wlen' , 'wnam' , 'wpos' , 'volts' , 'mW' )
+    save( fnam.coef , 'wlen' , 'name' , 'ipos' , 'chan' , 'C' )
+    save( fnam.meas , 'wlen' , 'name' , 'ipos' , 'chan' , 'volts' , 'mW' )
   catch
     errflg = true ;
   end
@@ -379,7 +412,7 @@ function  makelasertable( varargin )
     % Labels
     xlabel( 'Input Volts' )
     ylabel( 'Emission power (mW)' )
-    title( sprintf( 'Laser%d\\_%dnm' , wpos( i ) , wlen( i ) ) )
+    title( sprintf( 'Laser%d\\_%dnm' , ipos( i ) , wlen( i ) ) )
     legend( { 'Data' , 'Model' } , 'FontSize' , 12 , ...
       'Location' , 'northwest' )
 
