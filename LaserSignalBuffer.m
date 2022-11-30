@@ -195,33 +195,19 @@ classdef  LaserSignalBuffer < handle
         % Retrieve parameter info
         obj.ipar.( par ) = syn.getParameterInfo( nam , par ) ;
         
-        % Retrieve parameter value(s)
-        switch  par
+        % Skip array parameters
+        if  ~ ischar( obj.ipar.( par ).Array )  ||  ...
+            ~ strcmp( obj.ipar.( par ).Array , 'No' )
+          continue
+        end
 
-          % Read contents of buffer as row vector. This requires a
-          % decompression.
-          case  'Signal'
-            W = int32( syn.getParameterValues( nam , 'Signal' )' ) ;
+        % Retrieve value of scalar parameter
+        obj.( par ) = syn.getParameterValue( nam , par ) ;
 
-          % Scalar parameters
-          otherwise
-            obj.( par ) = syn.getParameterValue( nam , par ) ;
-
-        end % get param values
-        
       end % param info
 
       % Before setting obj.Signal, we need the maximum signal length.
       obj.MaxLength = 2 * obj.ipar.Signal.Array  -  2 ;
-
-      % Word indeces. Exclude first word because we will set this
-      % permanently to zero. Fetch words up to the end of the timer.
-      i = 2 : ceil( obj.Timer / obj.TickPerSamp / 2 ) ;
-
-      % Decompress local copy of Gizmo's buffer contents. Exclude value at
-      % buffer index position 0, because of the next step.
-      obj.Signal = double( typecast( W( 2 : end ) , 'int16' ) )  /  ...
-        obj.Scale ;
 
       % Guarantee that the buffer contains a zero at index position 0. This
       % way, the buffer component always outputs zeros whenever the laser
@@ -231,7 +217,10 @@ classdef  LaserSignalBuffer < handle
       % Determine the output signal's sampling rate. By assigning this to
       % FsTarget, we automatically populate .FsSignal. Note, FsClock is
       % ticks/second x samples/tick = samples/second
-      obj.FsTarget = obj.FsClock / obj.TickPerSamp ;
+      obj.FsTarget = double( obj.FsClock ) / double( obj.TickPerSamp ) ;
+
+      % Initialisation is finished
+      obj.init = false ;
       
     end
     
@@ -309,7 +298,7 @@ classdef  LaserSignalBuffer < handle
       obj.TickPerSamp = floor( obj.FsClock  /  x  ) ;
 
       % Now we find the real sample rate
-      obj.FsSignal = obj.FsClock / obj.TickPerSamp ;
+      obj.FsSignal = double( obj.FsClock ) / double( obj.TickPerSamp ) ;
 
       % Update duration of the signal
       obj.TimerSec = numel( obj.Signal )  /  obj.FsSignal ;
@@ -319,28 +308,36 @@ classdef  LaserSignalBuffer < handle
 
     function  set.Signal( obj , newsig )
 
+      % Number of samples
+      N = numel( newsig ) ;
+
       % New signal must be a vector that does not overflow the buffer
-      if  numel( newsig ) > obj.MaxLength  ||  ~ isvector( newsig )
+      if  N > obj.MaxLength  ||  ~ isvector( newsig )
         error( 'Signal must be vector with length <= %d.' , obj.MaxLength )
       end
+
+      % Guarantee that signal is a row vector
+      if  ~ isrow( newsig ) , newsig = newsig' ; end
 
       % Store new signal
       obj.Signal = newsig ;
 
-      % Initialisation, we just read the signal buffer so do nothing else.
-      if  obj.init , return , end
+      % If we have an odd number of samples then we must zero-pad one
+      % sample onto the tail so that we fill both int16 values of the last
+      % 32-bit word.
+      if  mod( N , 2 ) , zpad = 0 ; else , zpad = [ ] ; end
 
       % Scale, cast as int16, and pack into 32-bit words
-      W = typecast( int16( obj.Scale * newsig ) , 'int32' ) ;
+      W = typecast( int16( obj.Scale * [ newsig , zpad ] ) , 'int32' ) ;
 
       % Transfer signal to Gizmo buffer. Do not write over leading zero at
       % index 0 of buffer.
-      if  ~ obj.syn.setParameterValue( obj.name , 'Signal' , W , 1 )
+      if  ~ obj.syn.setParameterValues( obj.name , 'Signal' , W , 1 )
         error( 'Failed to write to Signal of %s' , obj.name )
       end
 
       % Update duration of the signal
-      obj.TimerSec = numel( newsig )  /  obj.FsSignal ;
+      obj.TimerSec = N  /  obj.FsSignal ;
 
     end
     
