@@ -1,8 +1,8 @@
 tabledir,.
-coefftable,lasers
-powertable,laserpower_mW
+coefftable,laser_coefs
+powertable,laser_power
 host,ESI-WSFRI037
-chans,4
+chans,1
 lasertester,LaserTester1
 input,200
 range,[0 5]

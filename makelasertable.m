@@ -294,8 +294,28 @@ function  makelasertable( varargin )
   % Allocate coefficients for each laser. Rows index lasers. Cols ind coef.
   C = zeros( N , 5 ) ;
 
-  % Best-fitting coefficients for each laser
-  for  i = 1 : N , C( i , : ) = transcoef( V , [ mW{ : , i } ] ) ; end
+  % Brute force nonlinear solution, find the forward and inverse piecewise
+  % polynomials for spline interpolation
+  pp = repmat( struct( 'fwd' , [ ] , 'inv' , [ ] ) , N , 1 ) ;
+
+    % Data for spline fits. We take just one copy of Voltages.
+    x = volts ;
+    
+
+  % Lasers
+  for  i = 1 : N
+
+    % Best-fitting coefficients for each laser
+    C( i , : ) = transcoef( V , [ mW{ : , i } ] ) ;
+
+    % Average powers across multiple channels.
+    y = mean( cat( 1 , mW{ : , i } ) , 1 ) ;
+
+    % Forward and inverse splines
+    pp( i ).fwd = spline( x , y ) ;
+    pp( i ).inv = spline( y , x ) ;
+
+  end % lasers
 
 
   %%% Write output tables %%%
@@ -353,7 +373,7 @@ function  makelasertable( varargin )
 
   % Save binary copies of the data
   try
-    save( fnam.coef , 'wlen' , 'name' , 'ipos' , 'chan' , 'C' )
+    save( fnam.coef , 'wlen' , 'name' , 'ipos' , 'chan' , 'C' , 'pp' )
     save( fnam.meas , 'wlen' , 'name' , 'ipos' , 'chan' , 'volts' , 'mW' )
   catch
     errflg = true ;
