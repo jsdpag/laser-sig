@@ -336,6 +336,9 @@ classdef  LaserSignalBuffer < handle
         error( 'Failed to write to Signal of %s' , obj.name )
       end
 
+      % Duration of signal in clock ticks
+      obj.Timer = obj.TickPerSamp * N ;
+
       % Update duration of the signal
       obj.TimerSec = N  /  obj.FsSignal ;
 
