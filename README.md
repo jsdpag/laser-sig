@@ -30,6 +30,18 @@ A liberal laser de-activation signal is triggered in response to one of three po
 
 Matlab class that uses SynapseAPI to set parameters in a named LaserController.rcx Gizmo.
 
+## LaserSignalBuffer.rcx
+
+This maintains a memory buffer on the TDT Sys3 hardware that can be loaded via SynapseAPI. This allows for any arbitrary signal to be loaded for triggered playback. A safety feature includes a timer that stops playback after a given duration. The sampling rate of the output can be set, within the limitations of the TDT hardware sampling rate. The buffered signal plays as a floating point LaserSignal output. When the signal is playing, the LaserEnable logical value is high; otherwise it is low.
+
+## LaserSignalBuffer.m
+
+MATLAB class for remote communication with the LaserSignalBuffer.rcx Gizmo. Loading a signal into the Gizmo's buffer is done simply by a standard MATLAB assignment statement to the .Signal parameter e.g. sigbuf.Signal = sin( 2*pi*30 * (1 : 508) / sigbuf.FsSample + 1.5 * pi ) ;
+
+## LaserSignalSwitch
+
+Synapse Gizmo for channeling the output of LaserSignalBuffer.rcx towards one pair of system outputs or another. Thus, at least two separate lasers can exclusively receive the laser signal and enable lines. The other receives only zero-valued signals. 
+
 ## LaserInputOutputMeasure.m
 
 Partially or fully automate the measurement of a laser's transfer function. The input to the laser is a constant analogue voltage. The output is the measured power of the laser's emission, in milliWatts. Uses SynapseAPI to control analogue voltage control signals via a named LaserTester.rcx Gizmo. Optionally, it can be configured to read the analoge voltage output of a power meter e.g. a PM100D in order to further automate measurement.
