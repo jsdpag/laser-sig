@@ -303,6 +303,7 @@ function  makelasertable( varargin )
 
   % Measured minimum power, inverse spline cannot go below this
   pmin = zeros( 1 , N ) ;
+  pmax = zeros( 1 , N ) ;
 
   % Lasers
   for  i = 1 : N
@@ -313,8 +314,9 @@ function  makelasertable( varargin )
     % Average powers across multiple channels.
     y = mean( cat( 1 , mW{ : , i } ) , 1 ) ;
 
-      % Min power
+      % Min and max power
       pmin( i ) = min( y ) ;
+      pmax( i ) = max( y ) ;
 
     % Forward and inverse splines
     pp( i ).fwd = spline( x , y ) ;
@@ -378,8 +380,9 @@ function  makelasertable( varargin )
 
   % Save binary copies of the data
   try
-    save( fnam.coef, 'wlen', 'name', 'ipos', 'chan', 'C', 'pp', 'pmin' )
-    save( fnam.meas, 'wlen', 'name', 'ipos', 'chan', 'volts', 'mW' )
+    save( fnam.coef , 'wlen' , 'name' , 'ipos' , 'chan' , 'C' , 'pp' , ...
+      'pmin' , 'pmax' )
+    save( fnam.meas , 'wlen' , 'name' , 'ipos' , 'chan' , 'volts' , 'mW' )
   catch
     errflg = true ;
   end
